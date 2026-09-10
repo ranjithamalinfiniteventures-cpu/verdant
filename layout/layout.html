@@ -1,0 +1,412 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>VERDANT — Layout</title>
+<style>
+:root{
+  --bg:#0b0f14; --panel:#121821; --line:#1f2a36; --text:#dfe9ec; --dim:#8fa3ab;
+  --floor:#3f7f88; --floor2:#356e77; --wall:#c9dade; --walltop:#e3eef0; --dark:#12161c;
+  --orange:#ff8c42; --gold:#f5c518; --gem:#4ade80; --mag:#d946ef; --red:#e03535; --cyan:#38bdf8;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,sans-serif;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans)}
+.wrap{max-width:1180px;margin:0 auto;padding:32px 20px 80px}
+header{border-bottom:1px solid var(--line);padding-bottom:20px;margin-bottom:24px}
+h1{font-family:var(--mono);font-size:26px;letter-spacing:.22em;margin:0 0 6px;color:var(--floor)}
+h1 b{color:var(--gold);font-weight:inherit}
+.sub{font-family:var(--mono);font-size:11px;letter-spacing:.14em;color:var(--dim);text-transform:uppercase}
+nav{display:flex;gap:6px;flex-wrap:wrap;margin:24px 0 20px}
+nav button{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;
+  background:var(--panel);color:var(--dim);border:1px solid var(--line);padding:10px 16px;border-radius:3px;cursor:pointer;transition:.15s}
+nav button:hover{color:var(--text);border-color:var(--dim)}
+nav button[aria-selected=true]{background:var(--floor);color:#06181b;border-color:var(--floor);font-weight:600}
+.view{display:none}.view.on{display:block}
+h2{font-family:var(--mono);font-size:13px;letter-spacing:.16em;text-transform:uppercase;color:var(--floor);margin:0 0 4px}
+.lede{color:var(--dim);font-size:14px;line-height:1.6;margin:0 0 22px;max-width:72ch}
+.lede b{color:var(--text);font-weight:600}
+
+/* ============ 16:9 screen ============ */
+.screen{position:relative;aspect-ratio:16/9;width:100%;border:1px solid var(--line);border-radius:6px;
+  overflow:hidden;background:var(--dark)}
+/* dark un-entered geometry so the bright room reads as "lit" */
+.dk{position:absolute;background:#191f28;border-radius:2px}
+.hazard{position:absolute;height:5px;background:var(--red);opacity:.85;border-radius:2px}
+
+.room{position:absolute;left:8%;top:7%;right:8%;bottom:15%;
+  background:var(--floor);border:13px solid var(--wall);border-top-color:var(--walltop);border-radius:4px;
+  background-image:linear-gradient(var(--floor2) 1px,transparent 1px),linear-gradient(90deg,var(--floor2) 1px,transparent 1px);
+  background-size:46px 46px;
+  box-shadow:0 0 70px 26px rgba(63,127,136,.34)}
+
+.prop{position:absolute;background:#e8f0f2;border-radius:3px;box-shadow:0 2px 0 #9fb4ba}
+.prop::after{content:"";position:absolute;left:0;right:0;top:38%;height:5px;background:var(--orange)}
+.door{position:absolute;width:14px}
+.door.in{left:-13px;background:repeating-linear-gradient(-45deg,#22c55e 0 5px,#15803d 5px 10px);box-shadow:0 0 14px rgba(34,197,94,.6)}
+.door.out{right:-13px;background:var(--gold);box-shadow:0 0 16px rgba(245,197,24,.65)}
+.dtag{position:absolute;font-family:var(--mono);font-size:8px;letter-spacing:.1em;white-space:nowrap}
+
+.bracket{position:absolute;width:150px;height:82px;transform:translate(-50%,-50%)}
+.bracket i{position:absolute;width:26px;height:26px;border:3px solid #fff;opacity:.95}
+.bracket i:nth-child(1){left:0;top:0;border-right:0;border-bottom:0}
+.bracket i:nth-child(2){right:0;top:0;border-left:0;border-bottom:0}
+.bracket i:nth-child(3){left:0;bottom:0;border-right:0;border-top:0}
+.bracket i:nth-child(4){right:0;bottom:0;border-left:0;border-top:0}
+.bracket b{position:absolute;left:50%;bottom:-16px;transform:translateX(-50%);font-family:var(--mono);
+  font-size:8px;letter-spacing:.13em;color:#fff;font-weight:400;white-space:nowrap}
+
+.sacred{position:absolute;left:17%;top:15%;right:17%;bottom:22%;border:1px dashed rgba(255,255,255,.42);border-radius:3px}
+.sacred b{position:absolute;left:50%;top:-8px;transform:translateX(-50%);background:var(--floor);padding:0 8px;
+  font-family:var(--mono);font-size:8px;letter-spacing:.13em;color:#fff;font-weight:400;white-space:nowrap}
+
+.player{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:22px;height:22px;border-radius:6px;
+  background:#2b3440;border:2px solid var(--orange);box-shadow:0 3px 0 rgba(0,0,0,.35)}
+.php{position:absolute;left:50%;top:calc(50% + 20px);transform:translateX(-50%);width:52px;height:6px;
+  background:rgba(0,0,0,.45);border-radius:3px;overflow:hidden;border:1px solid rgba(0,0,0,.3)}
+.php i{display:block;height:100%;width:72%;background:linear-gradient(90deg,#22c55e,#86efac)}
+.mob{position:absolute;width:15px;height:15px;border-radius:50% 50% 45% 45%;background:var(--mag);
+  box-shadow:0 0 12px rgba(217,70,239,.55),0 2px 0 #86198f}
+.mob.big{width:26px;height:26px;border:3px solid #fff}
+
+/* HUD */
+.hud{position:absolute;font-family:var(--mono);z-index:6}
+.tl{top:16px;left:16px}.tr{top:16px;right:16px}.tc{top:10px;left:50%;transform:translateX(-50%);text-align:center;background:rgba(11,15,20,.55);
+  padding:7px 16px 9px;border-radius:18px}
+.rc{top:74px;right:16px}.br{bottom:16px;right:16px}.bl{bottom:16px;left:16px}
+.tile{width:38px;height:38px;border-radius:9px;background:#1c2635;border:1px solid #2c3a4d;
+  display:grid;place-items:center;color:#dfe9ec;font-size:16px;box-shadow:0 2px 0 rgba(0,0,0,.4)}
+.cur{display:flex;gap:9px}
+.pill2{display:flex;align-items:center;gap:7px;background:#1c2635;border:1px solid #2c3a4d;border-radius:20px;
+  padding:4px 12px 4px 4px;box-shadow:0 2px 0 rgba(0,0,0,.4)}
+.dot{width:22px;height:22px;border-radius:50%;background:var(--gold);box-shadow:inset 0 -3px 0 rgba(0,0,0,.22)}
+.dot.g{background:var(--gem);border-radius:5px;transform:rotate(45deg);width:18px;height:18px}
+.cnum{font-size:14px;font-weight:700;color:#fff;letter-spacing:.04em}
+.rescol{display:flex;flex-direction:column;gap:7px;align-items:flex-end}
+.res{display:flex;align-items:center;gap:8px}
+.res .tile{width:32px;height:32px;font-size:14px;border-radius:8px}
+.res b{font-size:13px;color:#fff;font-weight:700;min-width:38px;text-align:right;
+  text-shadow:0 1px 3px rgba(0,0,0,.9)}
+
+.xp{width:250px;height:24px;border-radius:14px;background:rgba(20,28,38,.85);border:1px solid #2c3a4d;
+  overflow:hidden;position:relative;box-shadow:0 2px 0 rgba(0,0,0,.4)}
+.xp i{position:absolute;inset:2px;width:44%;border-radius:11px;background:linear-gradient(90deg,#38bdf8,#7dd3fc)}
+.xp span{position:absolute;inset:0;display:grid;place-items:center;font-size:10px;letter-spacing:.16em;color:#fff;font-weight:700}
+.chain{display:flex;gap:3px;justify-content:center;margin-top:6px}
+.chain span{width:16px;height:4px;border-radius:2px;background:rgba(255,255,255,.22)}
+.chain span.done{background:var(--gem)}.chain span.now{background:var(--cyan);box-shadow:0 0 8px var(--cyan)}
+.rem{font-size:8px;letter-spacing:.14em;color:#fff;margin-top:5px;text-shadow:0 1px 4px #000}
+
+.weap{width:74px;height:74px;border-radius:12px;background:linear-gradient(180deg,#fbd75b,#f0b429);
+  border:2px solid #fff;display:grid;place-items:center;box-shadow:0 3px 0 rgba(0,0,0,.45)}
+.weap svg{width:46px;height:46px}
+.wname{font-size:7.5px;letter-spacing:.1em;color:#fff;text-align:center;margin-top:5px;text-shadow:0 1px 4px #000}
+.stick{width:78px;height:78px;border-radius:50%;border:2px dashed rgba(255,255,255,.3);display:grid;place-items:center}
+.stick i{width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,.28);border:2px solid rgba(255,255,255,.55)}
+.arrow{position:absolute;color:var(--red);font-size:15px;z-index:7;text-shadow:0 0 10px rgba(224,53,53,.9)}
+.pin{position:absolute;width:18px;height:18px;border-radius:50%;background:var(--cyan);color:#04222e;
+  font-family:var(--mono);font-size:9px;font-weight:700;display:grid;place-items:center;z-index:20;
+  box-shadow:0 0 0 3px rgba(11,15,20,.92)}
+
+.keys{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:1px;background:var(--line);
+  border:1px solid var(--line);border-radius:5px;overflow:hidden;margin-top:22px}
+.key{background:var(--panel);padding:13px 15px;display:flex;gap:11px}
+.key b{flex:none;width:18px;height:18px;border-radius:50%;background:var(--cyan);color:#04222e;
+  font-family:var(--mono);font-size:9px;display:grid;place-items:center;margin-top:1px}
+.key div{font-size:12.5px;line-height:1.5}
+.key strong{display:block;font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--text);margin-bottom:3px}
+.key span{color:var(--dim)}
+.rules{margin-top:26px;border-left:2px solid var(--floor);padding:2px 0 2px 18px}
+.rules p{margin:0 0 11px;font-size:13.5px;line-height:1.65;color:var(--dim)}
+.rules p:last-child{margin:0}
+.rules em{color:var(--text);font-style:normal;font-weight:600}
+.sw{display:flex;flex-wrap:wrap;gap:1px;background:var(--line);border:1px solid var(--line);border-radius:5px;overflow:hidden;margin-top:20px}
+.sw div{flex:1 1 120px;background:var(--panel);padding:10px 12px;font-family:var(--mono);font-size:9px;letter-spacing:.1em;color:var(--dim)}
+.sw i{display:block;height:26px;border-radius:3px;margin-bottom:7px}
+svg.dia{display:block;width:100%;height:auto;border:1px solid var(--line);border-radius:6px;background:var(--dark)}
+.note{font-family:var(--mono);font-size:10px;color:var(--dim);letter-spacing:.1em;margin-top:12px;text-transform:uppercase}
+@media(max-width:640px){.wrap{padding:20px 12px 60px}h1{font-size:19px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>V E R D A N T</h1>
+  <div class="sub">Layout &nbsp;·&nbsp; top-down 3D auto-shooter &nbsp;·&nbsp; three.js &nbsp;·&nbsp; landscape 16:9 &nbsp;·&nbsp; <b style="color:var(--gold)">bright-room lighting</b></div>
+</header>
+
+<nav>
+  <button aria-selected="true" data-v="s">01 — Screen layout</button>
+  <button aria-selected="false" data-v="m">02 — Station map</button>
+  <button aria-selected="false" data-v="r">03 — Room anatomy</button>
+</nav>
+
+<!-- ============ 01 ============ -->
+<section class="view on" id="v-s">
+  <h2>Screen layout — in-combat HUD</h2>
+  <p class="lede">High-key lighting: the active room is <b>bright</b>, everything not yet entered is near-black.
+  No flashlight, no fog. Health rides under the player so the eye never leaves centre, and the HUD sits on the
+  four edges as chunky rounded tiles. Numbers map to the key below.</p>
+
+  <div class="screen">
+    <!-- dark un-entered geometry -->
+    <div class="dk" style="left:0;bottom:0;width:26%;height:13%"></div>
+    <div class="dk" style="left:30%;bottom:0;width:18%;height:9%"></div>
+    <div class="dk" style="right:0;bottom:0;width:22%;height:14%"></div>
+    <div class="hazard" style="left:2%;bottom:11%;width:24%"></div>
+    <div class="hazard" style="right:2%;bottom:12%;width:20%"></div>
+
+    <div class="room">
+      <div class="prop" style="left:16px;top:14px;width:66px;height:34px"></div>
+      <div class="prop" style="right:16px;top:14px;width:66px;height:34px"></div>
+      <div class="prop" style="left:16px;bottom:14px;width:52px;height:44px"></div>
+      <div class="prop" style="right:16px;bottom:14px;width:52px;height:44px"></div>
+
+      <div class="door in" style="top:38%;height:26%"></div>
+      <div class="dtag" style="left:4px;top:30%;color:#22c55e">◀ REGROWN SHUT</div>
+      <div class="door out" style="top:38%;height:26%"></div>
+      <div class="dtag" style="right:4px;top:30%;color:var(--gold);text-align:right">EXIT · LOCKED ▶</div>
+
+      <div class="sacred"><b>SACRED ZONE — no HUD may enter · ~60% of frame stays open floor</b></div>
+
+      <div class="bracket" style="left:34%;top:31%">
+        <i></i><i></i><i></i><i></i>
+        <b>OBJECTIVE MARKER</b>
+      </div>
+
+      <div class="mob" style="left:20%;top:20%"></div>
+      <div class="mob" style="left:76%;top:17%"></div>
+      <div class="mob" style="left:83%;top:64%"></div>
+      <div class="mob" style="left:27%;top:76%"></div>
+      <div class="mob" style="left:63%;top:82%"></div>
+      <div class="mob big" style="left:66%;top:38%"></div>
+    </div>
+
+    <div class="player"></div>
+    <div class="php"><i></i></div>
+
+    <div class="arrow" style="left:5px;top:42%">◀</div>
+    <div class="arrow" style="right:5px;top:72%">▶</div>
+    <div class="arrow" style="left:70%;top:4px">▲</div>
+
+    <div class="hud tl"><div class="tile">⚙</div></div>
+
+    <div class="hud tc">
+      <div class="xp"><i></i><span>MODULE 03 · HYDROPONICS</span></div>
+      <div class="chain"><span class="done"></span><span class="done"></span><span class="now"></span>
+        <span></span><span></span><span></span><span></span><span></span><span></span></div>
+      <div class="rem">GROWTH REMAINING &nbsp;14</div>
+    </div>
+
+    <div class="hud tr">
+      <div class="cur">
+        <div class="pill2"><div class="dot"></div><div class="cnum">130</div></div>
+        <div class="pill2"><div class="dot g"></div><div class="cnum">0</div></div>
+      </div>
+    </div>
+
+    <div class="hud rc">
+      <div class="rescol">
+        <div class="res"><div class="tile">⚙</div><b>897</b></div>
+        <div class="res"><div class="tile">▮</div><b>68</b></div>
+        <div class="res"><div class="tile" style="color:#ff6b6b">✚</div><b>1</b></div>
+      </div>
+    </div>
+
+    <div class="hud bl"><div class="stick"><i></i></div></div>
+
+    <div class="hud br">
+      <div class="weap">
+        <svg viewBox="0 0 48 48" fill="#20262e"><rect x="4" y="19" width="27" height="10" rx="2"/>
+          <rect x="29" y="21" width="16" height="5" rx="2"/><rect x="10" y="27" width="7" height="12" rx="2"/>
+          <rect x="19" y="13" width="9" height="6" rx="2"/></svg>
+      </div>
+      <div class="wname">HERBICIDE SPRAYER</div>
+    </div>
+
+    <div class="pin" style="left:58px;top:20px">1</div>
+    <div class="pin" style="left:50%;top:6px;margin-left:130px">2</div>
+    <div class="pin" style="right:132px;top:26px">3</div>
+    <div class="pin" style="right:104px;top:82px">4</div>
+    <div class="pin" style="left:calc(50% + 16px);top:calc(50% + 14px)">5</div>
+    <div class="pin" style="right:96px;bottom:60px">6</div>
+    <div class="pin" style="left:98px;bottom:26px">7</div>
+    <div class="pin" style="left:2px;top:calc(42% + 22px)">8</div>
+    <div class="pin" style="left:34%;top:26%">9</div>
+    <div class="pin" style="left:14px;bottom:34px">10</div>
+  </div>
+
+  <div class="keys">
+    <div class="key"><b>1</b><div><strong>Settings</strong><span>Single tile, far corner. The only non-gameplay control on screen.</span></div></div>
+    <div class="key"><b>2</b><div><strong>Module bar + growth counter</strong><span>Fills as you clear. Nine pips show the whole run; the counter is the clear condition — exit unlocks at zero.</span></div></div>
+    <div class="key"><b>3</b><div><strong>Biomass / Seed Vault</strong><span>Run currency (gold) and meta currency (gem). Glanceable, never urgent.</span></div></div>
+    <div class="key"><b>4</b><div><strong>Resource stack</strong><span>Salvage, ammo, medkits. Vertical tiles so the count reads without parsing a label.</span></div></div>
+    <div class="key"><b>5</b><div><strong>Player + health bar</strong><span>Locked to screen centre; HP floats <em>under the character</em> in world space so your eye never leaves the fight.</span></div></div>
+    <div class="key"><b>6</b><div><strong>Weapon card</strong><span>Gold tile, bottom-right, thumb-reachable. Tap to fire the ultimate; the card is also the swap slot.</span></div></div>
+    <div class="key"><b>7</b><div><strong>Virtual stick (mobile)</strong><span>Floating origin — spawns wherever the thumb lands. Hidden on desktop, where WASD drives.</span></div></div>
+    <div class="key"><b>8</b><div><strong>Off-screen threat arrows</strong><span>Being surrounded is the fail state, so danger you cannot see must still be legible.</span></div></div>
+    <div class="key"><b>9</b><div><strong>Objective marker</strong><span>White floor brackets mark where to go or what to interact with. World-space, so it survives the camera moving.</span></div></div>
+    <div class="key"><b>10</b><div><strong>Un-entered space</strong><span>Near-black. Contrast comes from lit room vs dark unknown — that is what replaces the flashlight.</span></div></div>
+  </div>
+
+  <div class="sw">
+    <div><i style="background:#3f7f88"></i>FLOOR &nbsp;#3f7f88</div>
+    <div><i style="background:#c9dade"></i>WALL &nbsp;#c9dade</div>
+    <div><i style="background:#e3eef0"></i>WALL TOP &nbsp;#e3eef0</div>
+    <div><i style="background:#12161c"></i>UNKNOWN &nbsp;#12161c</div>
+    <div><i style="background:#ff8c42"></i>ACCENT &nbsp;#ff8c42</div>
+    <div><i style="background:#d946ef"></i>GROWTH &nbsp;#d946ef</div>
+    <div><i style="background:#f5c518"></i>LOOT &nbsp;#f5c518</div>
+    <div><i style="background:#e03535"></i>HAZARD &nbsp;#e03535</div>
+  </div>
+
+  <div class="rules">
+    <p><em>Lighting.</em> One bright key light per active room plus soft ambient — flat, shadow-light, fully readable. No dynamic player light of any kind. A room lights up the instant its door opens; that flood <em>is</em> the reward beat.</p>
+    <p><em>Camera.</em> Fixed top-down tilted ~55°, follows the player with soft lag and slight look-ahead. It never rotates — the moment the world spins, a one-stick game becomes unreadable.</p>
+    <p><em>The sacred zone.</em> Nothing opaque may enter the dashed box. Damage numbers, pickups and VFX are allowed; panels are not.</p>
+    <p><em>Contrast law.</em> Growth is magenta, player is orange-on-dark, loot is gold, the world is bright teal and white. Every entity must be identifiable on a phone, in daylight, at a glance.</p>
+    <p><em>Between rooms.</em> The HUD fades to 20% and three upgrade cards take the centre — the only time the sacred zone is used, and the only time the player thinks slowly.</p>
+  </div>
+</section>
+
+<!-- ============ 02 ============ -->
+<section class="view" id="v-m">
+  <h2>Station map — nine modules</h2>
+  <p class="lede">One critical path, no branching. Each module introduces exactly one new idea, then the next
+  combines it with what came before. Cleared modules stay lit behind you but the door regrows — the playable
+  space only ever shrinks.</p>
+
+  <svg class="dia" viewBox="0 0 960 470" xmlns="http://www.w3.org/2000/svg" font-family="ui-monospace,Menlo,monospace">
+    <defs>
+      <marker id="ar" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#3f7f88"/></marker>
+      <linearGradient id="cv" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0%" stop-color="#38bdf8"/><stop offset="55%" stop-color="#f5c518"/><stop offset="100%" stop-color="#e03535"/></linearGradient>
+    </defs>
+    <path d="M92 118 H228 M320 118 H456 M548 118 H684 M776 118 Q862 118 862 176 Q862 234 776 234
+             M684 234 H548 M456 234 H320 M228 234 H140 Q76 234 76 292 Q76 350 140 350 M232 350 H368"
+          stroke="#3f7f88" stroke-width="1.5" fill="none" stroke-dasharray="4 4" opacity=".6" marker-end="url(#ar)"/>
+    <g id="mods"></g>
+    <text x="40" y="412" fill="#8fa3ab" font-size="9" letter-spacing="2">DIFFICULTY / ENEMY DENSITY</text>
+    <path d="M40 452 H920" stroke="#1f2a36"/>
+    <path d="M40 448 C 150 444, 210 424, 270 418 S 400 400, 470 386 S 600 366, 670 344 S 790 316, 850 268 L 880 236"
+          stroke="url(#cv)" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+    <circle cx="270" cy="418" r="3.5" fill="#38bdf8"/><text x="258" y="436" fill="#38bdf8" font-size="8">CHKPT</text>
+    <circle cx="600" cy="371" r="3.5" fill="#38bdf8"/><text x="588" y="389" fill="#38bdf8" font-size="8">CHKPT</text>
+    <circle cx="880" cy="236" r="4" fill="#e03535"/><text x="846" y="224" fill="#e03535" font-size="8">BOSS</text>
+  </svg>
+  <div class="note">Run target 12–18 min &nbsp;·&nbsp; ~90 s per module &nbsp;·&nbsp; death returns you to the last checkpoint, Seed Vault is kept</div>
+</section>
+
+<!-- ============ 03 ============ -->
+<section class="view" id="v-r">
+  <h2>Room anatomy — the unit of the game</h2>
+  <p class="lede">Every module is built from this template. A lit, closed arena: you enter, it seals behind you,
+  the growth erupts from the perimeter, and the exit unlocks when the last one dies.</p>
+
+  <svg class="dia" viewBox="0 0 960 520" xmlns="http://www.w3.org/2000/svg" font-family="ui-monospace,Menlo,monospace">
+    <rect x="0" y="0" width="960" height="520" fill="#12161c"/>
+    <!-- walls + bright floor -->
+    <rect x="142" y="52" width="676" height="416" rx="7" fill="#c9dade"/>
+    <rect x="156" y="66" width="648" height="388" rx="4" fill="#3f7f88"/>
+    <g stroke="#356e77" stroke-width="1">
+      <path d="M156 112H804M156 158H804M156 204H804M156 250H804M156 296H804M156 342H804M156 388H804M156 434H804"/>
+      <path d="M202 66V454M248 66V454M294 66V454M340 66V454M386 66V454M432 66V454M478 66V454M524 66V454M570 66V454M616 66V454M662 66V454M708 66V454M754 66V454"/>
+    </g>
+
+    <g fill="none" stroke="#f0abfc" stroke-width="1.3" stroke-dasharray="6 5" opacity=".9">
+      <path d="M176 86 H784"/><path d="M176 434 H784"/><path d="M176 86 V434"/><path d="M784 86 V434"/>
+    </g>
+    <text x="480" y="104" fill="#fdf4ff" font-size="9" text-anchor="middle" letter-spacing="2">SPAWN PERIMETER — growth erupts from any edge</text>
+
+    <!-- entry sealed -->
+    <rect x="142" y="230" width="14" height="62" fill="#22c55e"/>
+    <path d="M144 234 q11 14 10 28 M144 258 q12 14 9 26 M146 282 q9 5 7 8" stroke="#15803d" stroke-width="2.5" fill="none"/>
+    <text x="132" y="248" fill="#22c55e" font-size="9" text-anchor="end">ENTRY — REGROWN SHUT</text>
+    <text x="132" y="262" fill="#8fa3ab" font-size="8" text-anchor="end">no backtracking</text>
+
+    <!-- exit locked -->
+    <rect x="804" y="230" width="14" height="62" fill="#f5c518"/>
+    <text x="830" y="248" fill="#f5c518" font-size="9">EXIT — LOCKED</text>
+    <text x="830" y="262" fill="#8fa3ab" font-size="8">opens at 0 growth</text>
+
+    <!-- cover props -->
+    <g>
+      <rect x="246" y="140" width="52" height="40" rx="4" fill="#e8f0f2"/><rect x="246" y="155" width="52" height="6" fill="#ff8c42"/>
+      <rect x="638" y="140" width="52" height="40" rx="4" fill="#e8f0f2"/><rect x="638" y="155" width="52" height="6" fill="#ff8c42"/>
+      <rect x="246" y="336" width="52" height="40" rx="4" fill="#e8f0f2"/><rect x="246" y="351" width="52" height="6" fill="#ff8c42"/>
+      <rect x="638" y="336" width="52" height="40" rx="4" fill="#e8f0f2"/><rect x="638" y="351" width="52" height="6" fill="#ff8c42"/>
+    </g>
+    <text x="272" y="132" fill="#0d3238" font-size="8" text-anchor="middle">COVER</text>
+    <text x="664" y="132" fill="#0d3238" font-size="8" text-anchor="middle">COVER</text>
+
+    <ellipse cx="480" cy="260" rx="192" ry="122" fill="none" stroke="#fff" stroke-width="1.4" stroke-dasharray="4 7" opacity=".75"/>
+    <text x="480" y="150" fill="#fff" font-size="9" text-anchor="middle" letter-spacing="1.5">KITE LANE — always circle-able, never a dead end</text>
+
+    <!-- player + hp -->
+    <rect x="288" y="248" width="24" height="24" rx="6" fill="#2b3440" stroke="#ff8c42" stroke-width="2.5"/>
+    <rect x="276" y="280" width="48" height="7" rx="3.5" fill="#0e2226"/>
+    <rect x="278" y="282" width="32" height="3" rx="1.5" fill="#4ade80"/>
+    <text x="300" y="304" fill="#fff" font-size="9" text-anchor="middle">YOU + HP</text>
+
+    <g fill="#d946ef" stroke="#86198f" stroke-width="1.5">
+      <circle cx="196" cy="118" r="8"/><circle cx="560" cy="100" r="8"/><circle cx="746" cy="192" r="8"/>
+      <circle cx="716" cy="398" r="8"/><circle cx="404" cy="424" r="8"/><circle cx="196" cy="392" r="8"/>
+    </g>
+    <circle cx="480" cy="260" r="17" fill="#d946ef" stroke="#fff" stroke-width="3"/>
+    <text x="480" y="300" fill="#fff" font-size="9" text-anchor="middle">BLOOMER — rooted spawner, kill it first</text>
+
+    <g fill="#f5c518" stroke="#a16207" stroke-width="1.2">
+      <circle cx="356" cy="196" r="5.5"/><circle cx="376" cy="210" r="5.5"/><circle cx="596" cy="356" r="5.5"/></g>
+    <text x="366" y="182" fill="#fde68a" font-size="8" text-anchor="middle">BIOMASS</text>
+
+    <text x="480" y="496" fill="#8fa3ab" font-size="9" text-anchor="middle" letter-spacing="1.5">
+      CENTRE STAYS OPEN — cover sits at the corners so the player is never boxed in by level geometry
+    </text>
+  </svg>
+
+  <div class="rules">
+    <p><em>Sequence.</em> Enter → room lights up → door regrows shut behind you → 2–4 spawn waves from rotating edges → last kill unlocks the exit → three upgrade cards → next module.</p>
+    <p><em>Spawn rule.</em> Never inside the kite lane, never within 6 m of the player. Growth erupts from the perimeter only, so a surround is always something the player walked into.</p>
+    <p><em>Cover rule.</em> Cover blocks enemies, not shots. It breaks sightlines and creates kiting geometry — it must never let the player camp a corner safely.</p>
+    <p><em>Size.</em> Roughly 33 × 20 m, about 2.5 screens wide at the default camera height. Big enough to run a full circle, small enough that the far wall is always implied.</p>
+  </div>
+</section>
+
+</div>
+<script>
+const MODS=[
+ [92,118,'01','CRYO BAY','Creepers · tutorial'],
+ [320,118,'02','CORRIDOR A','Lashers'],
+ [548,118,'03','HYDROPONICS','Sporelings · CHECKPOINT'],
+ [776,118,'04','MED LAB','Thornbeast'],
+ [776,234,'05','REACTOR RING','tight arena'],
+ [548,234,'06','CREW QUARTERS','Bloomer · CHECKPOINT'],
+ [320,234,'07','CARGO HOLD','Seeders · open arena'],
+ [92,350,'08','GREENHOUSE','gauntlet — all types'],
+ [368,350,'09','POD BAY','HEARTROOT — escape']
+];
+const g=document.getElementById('mods');
+MODS.forEach(([x,y,n,name,sub],i)=>{
+  const boss=i===8, chk=/CHECKPOINT/.test(sub), lit=i<3;
+  const c=boss?'#e03535':chk?'#38bdf8':'#3f7f88';
+  g.insertAdjacentHTML('beforeend',`
+    <g>
+      <rect x="${x}" y="${y-26}" width="136" height="52" rx="5"
+            fill="${boss?'rgba(224,53,53,.10)':lit?'#1b2b30':'#161b23'}" stroke="${c}" stroke-width="${boss?2:1.2}"/>
+      <text x="${x+10}" y="${y-9}" fill="${c}" font-size="9" letter-spacing="1.5">${n}</text>
+      <text x="${x+10}" y="${y+4}" fill="#dfe9ec" font-size="10" letter-spacing=".6">${name}</text>
+      <text x="${x+10}" y="${y+17}" fill="#8fa3ab" font-size="7.5">${sub}</text>
+    </g>`);
+});
+const btns=[...document.querySelectorAll('nav button')];
+btns.forEach(b=>b.onclick=()=>{
+  btns.forEach(o=>o.setAttribute('aria-selected',String(o===b)));
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('on'));
+  document.getElementById('v-'+b.dataset.v).classList.add('on');
+});
+</script>
+</body>
+</html>

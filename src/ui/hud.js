@@ -1,0 +1,327 @@
+import * as THREE from 'three';
+import { audio } from '../core/audio.js';
+import { Minimap } from './minimap.js';
+import { leaderboard } from '../game/leaderboard.js';
+
+const $ = id => document.getElementById(id);
+
+export class Hud {
+  constructor(engine){
+    this.engine = engine;
+    this.el = {
+      hud: $('hud'), boot: $('boot'), bar: $('bar').firstElementChild,
+      php: $('php'), phpFill: $('phpfill'), hint: $('hint'),
+      xpFill: $('xpfill'), xpLabel: $('xplabel'), pips: $('pips'), rem: $('rem'),
+      biomass: $('biomass'), vault: $('vault'), salvage: $('salvage'),
+      toast: $('toast'), dead: $('dead'), flash: $('flash'), perf: $('perf'), snd: $('snd'),
+      threats: $('threats')
+    };
+    this.p = new THREE.Vector2();
+    this.anchor = new THREE.Vector3();
+    this.ndc = new THREE.Vector3();
+    this.arrows = [];
+
+    this.floorCount = 3;   // replaced by setFloorCount() once the tower is known
+
+    this.el.snd.addEventListener('click', e => {
+      e.stopPropagation();
+      this.setMuted(!audio.toggle());
+      if (audio.enabled) audio.confirm();
+    });
+    this.setMuted(!audio.enabled);
+    this.minimap = new Minimap(this.el.hud);
+    this.setModule(0, 'CRYO BAY', 0);
+  }
+
+  /** How many floors the tower has — drives the pip strip and the label. */
+  setFloorCount(n){
+    this.floorCount = n;
+    this.el.pips.textContent = '';
+    for (let i = 0; i < n; i++) this.el.pips.appendChild(document.createElement('b'));
+  }
+
+  setModule(index, name, remaining){
+    [...this.el.pips.children].forEach((b, i) => {
+      b.className = i < index ? 'd' : i === index ? 'n' : '';
+    });
+    this.el.xpLabel.textContent = `FLOOR ${index + 1} / ${this.floorCount} · ${name}`;
+    this.el.rem.innerHTML = `GROWTH REMAINING&nbsp;&nbsp;${remaining}`;
+  }
+
+  /* Naming the room each straggler is in is half the answer to "where are the
+     last three?" — the arrows give the other half. */
+  setFloorRooms(zones, active, cleared, counts){
+    if (!this.floorRooms){this.floorRooms=document.createElement('div');this.floorRooms.className='floor-rooms';this.el.rem.parentElement.appendChild(this.floorRooms);}
+    const text = zones.map((z, i) => {
+      const mark = i === active ? '▸ ' : '';
+      if (!z.started) return `${mark}${z.name} · UNEXPLORED`;
+      const n = counts ? counts[i] : null;
+      return n == null ? `${mark}${z.name}` : `${mark}${z.name} ${n}`;
+    }).join('   /   ') + (cleared ? ' · STAIRS ↑ OPEN' : ` · CLEAR ALL ${zones.length} ROOMS`);
+    if(this.floorRooms.textContent!==text)this.floorRooms.textContent=text;
+  }
+
+  /* Edge arrows for growth that is off screen. Rooms are far wider than the
+     9.2 m weapon reach, so without these the last few enemies are a hunt with
+     no information. Nearest first, capped, so a full room isn't a ring of
+     arrows. */
+  setThreats(list, playerPos){
+    const cam = this.engine.camera;
+    const W = innerWidth, H = innerHeight;
+    const cx = W / 2, cy = H / 2;
+    const margin = Math.max(26, Math.min(W, H) * 0.055);
+    const halfW = Math.max(10, cx - margin), halfH = Math.max(10, cy - margin);
+
+    const off = [];
+    for (const e of list){
+      this.ndc.set(e.pos.x, 0.6, e.pos.z).project(cam);
+      const behind = this.ndc.z > 1;
+      let nx = this.ndc.x, ny = this.ndc.y;
+      if (behind){ nx = -nx; ny = -ny; }
+      // a little inside the frame still counts as visible, so arrows don't
+      // flicker on and off along the edge
+      if (!behind && Math.abs(nx) < 0.94 && Math.abs(ny) < 0.94) continue;
+      const px = (nx * 0.5 + 0.5) * W, py = (-ny * 0.5 + 0.5) * H;
+      const dx = px - cx, dy = py - cy;
+      const scale = Math.min(halfW / (Math.abs(dx) || 1e-6), halfH / (Math.abs(dy) || 1e-6));
+      off.push({
+        x: cx + dx * scale, y: cy + dy * scale,
+        a: Math.atan2(dy, dx), color: e.def.color,
+        d: Math.hypot(e.pos.x - playerPos.x, e.pos.z - playerPos.z),
+      });
+    }
+    off.sort((a, b) => a.d - b.d);
+    const show = off.slice(0, 8);
+
+    while (this.arrows.length < show.length){
+      const el = document.createElement('div');
+      el.className = 'threat';
+      this.el.threats.appendChild(el);
+      this.arrows.push(el);
+    }
+    for (let i = 0; i < this.arrows.length; i++){
+      const el = this.arrows[i], t = show[i];
+      if (!t){ el.style.opacity = 0; continue; }
+      // nearer reads bigger and brighter, so the arrows rank themselves
+      const k = Math.max(0.55, Math.min(1.25, 22 / (t.d + 8)));
+      el.style.color = '#' + t.color.toString(16).padStart(6, '0');
+      el.style.opacity = Math.max(0.4, Math.min(0.95, k));
+      el.style.transform = `translate(${t.x}px,${t.y}px) translate(-50%,-50%) rotate(${t.a}rad) scale(${k})`;
+    }
+  }
+
+  setProgress(f){ this.el.xpFill.style.width = (6 + f * 94) + '%'; }
+  /** Shield charges live above the health bar, so you can see what you bought. */
+  setShield(n){
+    const el = this.el.shield || (this.el.shield = document.getElementById('phpshield'));
+    if (this._shieldShown === n) return;
+    this._shieldShown = n;
+    el.textContent = '';
+    for (let i = 0; i < n; i++) el.appendChild(document.createElement('b'));
+  }
+
+  setHp(f){ this.el.phpFill.style.width = Math.max(0, f) * 100 + '%'; }
+
+  /** Boss health, or null to hide the bar. */
+  setBoss(boss){
+    const el = this.el.bossbar || (this.el.bossbar = document.getElementById('bossbar'));
+    if (!el) return;
+    if (!boss || !boss.alive){
+      if (!el.hidden){ el.hidden = true; this._bossFrac = -1; }
+      return;
+    }
+    el.hidden = false;
+    const f = boss.hpFrac;
+    if (this._bossFrac !== f){
+      this._bossFrac = f;
+      el.querySelector('i').style.width = (f * 100) + '%';
+      // the ghost trails behind, so a big hit reads as a chunk taken off
+      el.querySelector('u').style.width = (f * 100) + '%';
+    }
+  }
+
+  /** The floor upgrade currently running, and how long it has left. */
+  setBoon(boon){
+    const el = this.el.boon || (this.el.boon = document.getElementById('boon'));
+    if (!el) return;
+    if (!boon){
+      if (!el.hidden){ el.hidden = true; this._boonName = null; this._boonSecs = -1; }
+      return;
+    }
+    el.hidden = false;
+    if (this._boonName !== boon.name){
+      this._boonName = boon.name;
+      el.querySelector('span').textContent = boon.name;
+    }
+    // a wildcard runs until the boss dies, so there is no number to show
+    const secs = boon.permanent ? -1 : Math.max(0, Math.ceil(boon.t));
+    if (this._boonSecs !== secs){
+      this._boonSecs = secs;
+      const b = el.querySelector('b');
+      b.textContent = boon.permanent ? '' : secs;
+      b.hidden = boon.permanent;
+      el.classList.toggle('low', !boon.permanent && secs <= 5);
+      el.classList.toggle('wild', !!boon.permanent);
+    }
+  }
+  /** Second Wind charges left this run; the row hides when the perk isn't owned. */
+  setRevives(n){
+    const row = document.getElementById('revive-row');
+    if (!row) return;
+    row.hidden = !(n > 0);
+    document.getElementById('medkit').textContent = n;
+  }
+  setCounts({ biomass, vault, salvage }){
+    if (biomass != null) this.el.biomass.textContent = biomass;
+    if (vault   != null) this.el.vault.textContent   = vault;
+    if (salvage != null) this.el.salvage.textContent = salvage;
+  }
+
+  /* pin the health bar under the character every frame */
+  track(worldPos){
+    this.anchor.set(worldPos.x, 0.02, worldPos.z);
+    this.engine.project(this.anchor, this.p);
+    this.el.php.style.transform = `translate(-50%,0) translate(${this.p.x}px,${this.p.y + 10}px)`;
+    this.el.php.style.left = '0px';
+    this.el.php.style.top  = '0px';
+  }
+
+  collectCoins(amount){
+    if (!this.coinPop){
+      this.coinPop = document.createElement('div'); this.coinPop.className = 'coin-pop';
+      this.el.biomass.parentElement.appendChild(this.coinPop);
+    }
+    this.coinStreak = (this.coinStreak || 0) + amount;
+    this.coinPop.textContent = `+${this.coinStreak} COINS`;
+    this.coinPop.getAnimations().forEach(a => a.cancel());
+    this.coinPop.animate([{opacity:1,transform:'translateY(0)'},{opacity:1,offset:0.65,transform:'translateY(-4px)'},{opacity:0,transform:'translateY(-14px)'}], {duration:1100,fill:'forwards'});
+    this.el.biomass.getAnimations().forEach(a => a.cancel());
+    this.el.biomass.animate([{transform:'scale(1.22)',color:'#ffe99d'},{transform:'scale(1)',color:'#ffffff'}], {duration:240});
+    clearTimeout(this.coinTimer);
+    this.coinTimer = setTimeout(() => { this.coinStreak = 0; }, 1100);
+  }
+
+  trackEnemies(enemies){
+    this.enemyBars ||= [];
+    let count = 0;
+    // Refresh camera matrices before projecting HUD anchors.
+    this.engine.camera.updateMatrixWorld();
+    for (const e of enemies){
+      if (!e.alive) continue;
+      let bar = this.enemyBars[count];
+      if (!bar){
+        bar = document.createElement('div'); bar.className = 'enemy-hp';
+        bar.appendChild(document.createElement('i'));
+        this.el.hud.appendChild(bar); this.enemyBars.push(bar);
+      }
+      this.anchor.set(e.pos.x, e.key === 'lasher' ? 2.7 : e.def.radius * 2 + 0.75, e.pos.z);
+      this.engine.project(this.anchor, this.p);
+      bar.hidden = this.p.x < 0 || this.p.x > innerWidth || this.p.y < 0 || this.p.y > innerHeight;
+      bar.style.transform = `translate(${this.p.x - 17}px,${this.p.y}px)`;
+      bar.firstElementChild.style.transform = `scaleX(${Math.max(0, Math.min(1, e.hp / (e.maxHp || e.def.hp)))})`;
+      count++;
+    }
+    for (let i = count; i < this.enemyBars.length; i++) this.enemyBars[i].hidden = true;
+  }
+
+  toast(text, ms = 1900){
+    this.el.toast.textContent = text;
+    this.el.toast.classList.add('on');
+    clearTimeout(this._t);
+    this._t = setTimeout(() => this.el.toast.classList.remove('on'), ms);
+  }
+
+  /* Press P for a frame-time readout — the only way to get a real number off
+     a machine I can't profile from here. */
+  perf(dt, engine){
+    this._pa = (this._pa || 0) + dt; this._pn = (this._pn || 0) + 1;
+    if (this._pa < 0.4) return;
+    const fps = Math.round(this._pn / this._pa);
+    const ms = (this._pa / this._pn * 1000).toFixed(1);
+    this._pa = 0; this._pn = 0;
+    this.el.perf.textContent = `${fps} FPS · ${ms}ms · Q${engine.quality} · ${Math.round(innerWidth * engine.renderer.getPixelRatio())}px`;
+  }
+
+  setMuted(on){
+    this.el.snd.classList.toggle('off', on);
+    this.el.snd.setAttribute('aria-label', on ? 'Turn sound on' : 'Mute sound');
+    this.el.snd.setAttribute('aria-pressed', String(!on));
+    this.el.snd.title = on ? 'Sound off · click to enable (M)' : 'Sound on · click to mute (M)';
+  }
+
+  togglePerf(){ this.el.perf.classList.toggle('on'); }
+
+  setFlash(v){ this.el.flash.style.opacity = v; }
+
+  /** Render the board; `mine` highlights the row just submitted. */
+  async renderBoard(mine){
+    const list = document.getElementById('rs-list');
+    document.getElementById('rs-scope').textContent =
+      leaderboard.shared ? 'GLOBAL' : 'THIS DEVICE';
+    const rows = await leaderboard.top(10);
+    list.textContent = '';
+    if (!rows || !rows.length){
+      const li = document.createElement('li');
+      li.className = 'empty';
+      li.textContent = rows ? 'No completed escapes yet — set the first time.'
+                            : 'Leaderboard unreachable.';
+      list.appendChild(li);
+      return;
+    }
+    rows.forEach((r, i) => {
+      const li = document.createElement('li');
+      if (mine && r.at === mine.at && r.name === mine.name) li.className = 'me';
+      const rank = document.createElement('b'); rank.textContent = `${i + 1}.`;
+      const nm = document.createElement('span'); nm.textContent = r.name;
+      const t = document.createElement('i'); t.textContent = leaderboard.format(r.seconds);
+      li.append(rank, nm, t);
+      list.appendChild(li);
+    });
+  }
+
+  showResults(stats, onAgain){
+    const $$ = id => document.getElementById(id);
+    $$('rs-floors').textContent = stats.floors;
+    $$('rs-kills').textContent  = stats.kills;
+    $$('rs-coins').textContent  = stats.coins;
+    if ($$('rs-gems')) $$('rs-gems').textContent = stats.gems ?? 0;
+    const m = Math.floor(stats.seconds / 60), sec = Math.floor(stats.seconds % 60);
+    $$('rs-time').textContent = `${m}:${String(sec).padStart(2,'0')}`;
+    const name = $$('rs-name');
+    const submit = $$('rs-submit');
+    name.value = leaderboard.getName();
+    // only a full escape is a time worth ranking
+    const eligible = !stats.assisted && stats.floors >= this.floorCount;
+    submit.disabled = !eligible;
+    submit.textContent = stats.assisted ? 'TEST RUN · NOT RANKED' : eligible ? 'SUBMIT TIME' : 'FINISH THE TOWER';
+    submit.onclick = async () => {
+      if (!eligible) return;
+      submit.disabled = true;
+      submit.textContent = 'SUBMITTED';
+      const res = await leaderboard.submit({ ...stats, name: name.value, required: this.floorCount });
+      await this.renderBoard(res && res.entry);
+    };
+    this.renderBoard(null);
+
+    const btn = $$('rs-again');
+    btn.onclick = () => { this.hideResults(); onAgain(); };
+    document.getElementById('results').classList.add('on');
+  }
+  hideResults(){ document.getElementById('results').classList.remove('on'); }
+
+  setDead(on){ this.el.dead.classList.toggle('on', on); }
+
+  ready(){
+    this.el.bar.style.width = '100%';
+    setTimeout(() => {
+      this.el.boot.classList.add('gone');
+      this.el.hud.classList.add('on');
+    }, 340);
+  }
+
+  hideHint(){
+    if (this._hinted) return;
+    this._hinted = true;
+    setTimeout(() => { this.el.hint.style.opacity = 0; }, 900);
+  }
+}

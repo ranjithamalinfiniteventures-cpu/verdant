@@ -1,0 +1,565 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>VERDANT</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%230f1720'/><path d='M16 26V13' stroke='%234ade80' stroke-width='2.6' stroke-linecap='round'/><path d='M16 15c0-5 4-8 9-8 0 5-3.6 8-9 8z' fill='%234ade80'/><path d='M16 20c0-4-3.2-6.4-7.4-6.4 0 4 2.9 6.4 7.4 6.4z' fill='%2322c55e'/></svg>">
+<link rel="stylesheet" href="./assets/fonts/outfit.css">
+<script>
+/* Failure reporter. Deliberately a CLASSIC script in ES5, loaded before anything
+   else: if the module bundle has a syntax error the browser cannot parse, a
+   modern-syntax handler would die with it and the player would just see a black
+   screen. This has to survive whatever kills the rest of the page.
+
+   A black screen is the worst possible failure — it tells the player nothing and
+   tells us nothing. Anything that goes wrong should say so on the page. */
+(function () {
+  var shown = false;
+  function show(title, detail) {
+    if (shown) return; shown = true;
+    try {
+      var d = document.createElement('div');
+      d.setAttribute('id', 'fatal');
+      d.style.cssText = 'position:fixed;inset:0;z-index:99999;overflow:auto;padding:28px;' +
+        'background:#0b0f14;color:#e6edf5;font:14px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace';
+      var gl = '';
+      try {
+        // a canvas only ever yields one context type, so each probe needs its own
+        var ok2 = !!document.createElement('canvas').getContext('webgl2');
+        var ok1 = !!document.createElement('canvas').getContext('webgl');
+        gl = 'WebGL2: ' + ok2 + '   WebGL1: ' + ok1;
+      } catch (e) { gl = 'WebGL: threw ' + e; }
+      d.innerHTML =
+        '<h2 style="margin:0 0 14px;color:#ff8c42;font:700 20px/1.3 system-ui,sans-serif">' + title + '</h2>' +
+        '<pre style="white-space:pre-wrap;margin:0 0 18px;color:#ffd9a0">' + String(detail) + '</pre>' +
+        '<div style="color:#8aa0b8">' + gl + '<br>' + navigator.userAgent + '</div>';
+      (document.body || document.documentElement).appendChild(d);
+    } catch (e) { /* nothing left to do */ }
+  }
+
+  window.addEventListener('error', function (e) {
+    if (e && e.target && e.target.tagName === 'SCRIPT')
+      show('A script failed to load', (e.target.src || 'inline script'));
+    else
+      show('Uncaught error', (e && e.message ? e.message : e) +
+        '\n' + ((e && e.filename) || '') + ':' + ((e && e.lineno) || ''));
+  }, true);
+
+  window.addEventListener('unhandledrejection', function (e) {
+    show('Unhandled promise rejection', (e && e.reason && (e.reason.stack || e.reason.message)) || e.reason);
+  });
+
+  window.addEventListener('load', function () {
+    setTimeout(function () {
+      if (!window.VERDANT) {
+        show('The game did not start',
+          'No error was thrown, but window.VERDANT was never set.\n' +
+          'That usually means a module failed to resolve or WebGL is unavailable.');
+        return;
+      }
+      /* Booted but never drew: the render loop is not running. This is what a
+         black screen with no console error actually looks like. */
+      if (!window.VERDANT.frames) {
+        show('The game loaded but never drew a frame',
+          'Modules resolved and setup finished, but the render loop has not run.');
+      }
+    }, 8000);
+  });
+})();
+</script>
+<style>
+:root{
+  --gold:#f5c518; --gem:#4ade80; --orange:#ff8c42; --red:#e03535; --cyan:#38bdf8;
+  --tile:#1c2635; --tile-b:#2c3a4d; --ink:#0b0f14;
+  --f:"Outfit",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  --u:clamp(11px,1.35vmin,17px);           /* HUD scale unit */
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;overflow:hidden;background:#05070a;
+  font-family:var(--f);color:#fff;user-select:none;overscroll-behavior:none}
+#app{position:fixed;inset:0}
+canvas{display:block;width:100%;height:100%;touch-action:none}
+
+/* ---------- HUD ---------- */
+#hud{position:absolute;inset:0;pointer-events:none;opacity:0;transition:opacity .6s .2s}
+#hud.on{opacity:1}
+.h{position:absolute;pointer-events:auto}
+.tl{top:calc(var(--u)*1.5);left:calc(var(--u)*1.5);display:flex;flex-direction:column;gap:calc(var(--u)*.7)}
+.tc{top:calc(var(--u)*1.1);left:50%;transform:translateX(-50%);text-align:center}
+.tr{top:calc(var(--u)*1.5);right:calc(var(--u)*1.5)}
+.rc{top:calc(var(--u)*5.6);right:calc(var(--u)*1.5)}
+.br{bottom:calc(var(--u)*1.5);right:calc(var(--u)*1.5);text-align:center}
+.bl{bottom:calc(var(--u)*1.5);left:calc(var(--u)*1.5)}
+
+.tile{width:calc(var(--u)*3.1);height:calc(var(--u)*3.1);border-radius:calc(var(--u)*.85);
+  background:linear-gradient(180deg,#243044,#18202d);border:1px solid var(--tile-b);
+  display:grid;place-items:center;font-size:calc(var(--u)*1.35);
+  box-shadow:0 calc(var(--u)*.22) 0 rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.09)}
+.tile:active{transform:translateY(1px)}
+.tile.snd{cursor:pointer}
+.tile.snd.off{color:rgba(255,255,255,.28);position:relative}
+.tile.snd.off::after{content:"";position:absolute;left:22%;right:22%;top:48%;height:2px;
+  background:#ff6b6b;transform:rotate(-42deg);border-radius:2px}
+
+.xp{width:calc(var(--u)*20);height:calc(var(--u)*2.1);border-radius:calc(var(--u)*1.2);
+  background:rgba(10,15,22,.72);border:1px solid var(--tile-b);position:relative;overflow:hidden;
+  box-shadow:0 calc(var(--u)*.22) 0 rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.07)}
+.xp i{position:absolute;left:2px;top:2px;bottom:2px;width:44%;border-radius:calc(var(--u)*1.2);
+  background:linear-gradient(180deg,#7dd3fc,#38bdf8);box-shadow:0 0 calc(var(--u)*1.2) rgba(56,189,248,.65)}
+.xp span{position:absolute;inset:0;display:grid;place-items:center;font-size:calc(var(--u)*.82);
+  font-weight:800;letter-spacing:.14em;text-shadow:0 1px 3px rgba(0,0,0,.7)}
+.pips{display:flex;gap:calc(var(--u)*.22);justify-content:center;margin-top:calc(var(--u)*.5)}
+.pips b{width:calc(var(--u)*1.35);height:calc(var(--u)*.32);border-radius:2px;background:rgba(255,255,255,.22)}
+.pips b.d{background:var(--gem)} .pips b.n{background:var(--cyan);box-shadow:0 0 calc(var(--u)*.7) var(--cyan)}
+.rem{font-size:calc(var(--u)*.72);font-weight:700;letter-spacing:.16em;margin-top:calc(var(--u)*.45);
+  color:#fff;text-shadow:0 1px 4px #000;opacity:.85}
+
+.cur{display:flex;gap:calc(var(--u)*.7)}
+.pill{display:flex;align-items:center;gap:calc(var(--u)*.6);padding:calc(var(--u)*.3) calc(var(--u)*.95) calc(var(--u)*.3) calc(var(--u)*.3);
+  border-radius:calc(var(--u)*1.4);background:linear-gradient(180deg,#243044,#18202d);border:1px solid var(--tile-b);
+  box-shadow:0 calc(var(--u)*.22) 0 rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.09)}
+.coin{width:calc(var(--u)*1.7);height:calc(var(--u)*1.7);border-radius:50%;
+  background:radial-gradient(circle at 35% 30%,#ffe484,var(--gold) 60%,#c99a05);
+  box-shadow:inset 0 calc(var(--u)*-.18) 0 rgba(0,0,0,.25)}
+.coin.g{border-radius:calc(var(--u)*.3);transform:rotate(45deg);width:calc(var(--u)*1.4);height:calc(var(--u)*1.4);
+  background:radial-gradient(circle at 35% 30%,#bbf7d0,var(--gem) 60%,#15803d)}
+.num{font-size:calc(var(--u)*1.15);font-weight:800;letter-spacing:.02em}
+
+.res{display:flex;flex-direction:column;gap:calc(var(--u)*.6);align-items:flex-end}
+.row{display:flex;align-items:center;gap:calc(var(--u)*.6)}
+.row .tile{width:calc(var(--u)*2.6);height:calc(var(--u)*2.6);font-size:calc(var(--u)*1.1);border-radius:calc(var(--u)*.7)}
+.row b{font-size:calc(var(--u)*1.05);font-weight:800;min-width:calc(var(--u)*3.2);text-align:right;
+  text-shadow:0 calc(var(--u)*.1) calc(var(--u)*.3) rgba(0,0,0,.9)}
+
+.weap{width:calc(var(--u)*5.4);height:calc(var(--u)*5.4);border-radius:calc(var(--u)*1.1);
+  background:linear-gradient(180deg,#ffdd6b,#eeae1f);border:2px solid rgba(255,255,255,.92);
+  display:grid;place-items:center;box-shadow:0 calc(var(--u)*.3) 0 rgba(0,0,0,.5),
+  0 0 calc(var(--u)*2) rgba(245,197,24,.35),inset 0 2px 0 rgba(255,255,255,.5)}
+.weap svg{width:70%;height:70%}
+.wname{font-size:calc(var(--u)*.68);font-weight:700;letter-spacing:.1em;margin-top:calc(var(--u)*.45);
+  text-shadow:0 1px 4px #000;opacity:.9}
+
+#stick{position:absolute;width:calc(var(--u)*8);height:calc(var(--u)*8);border-radius:50%;
+  border:2px solid rgba(255,255,255,.28);background:rgba(255,255,255,.06);
+  transform:translate(-50%,-50%);opacity:0;transition:opacity .18s;pointer-events:none;
+  backdrop-filter:blur(3px)}
+#stick i{position:absolute;left:50%;top:50%;width:calc(var(--u)*3.4);height:calc(var(--u)*3.4);
+  margin:calc(var(--u)*-1.7) 0 0 calc(var(--u)*-1.7);border-radius:50%;
+  background:rgba(255,255,255,.34);border:2px solid rgba(255,255,255,.65);
+  box-shadow:0 0 calc(var(--u)*1.4) rgba(255,255,255,.25)}
+#stick.on{opacity:1}
+
+/* world-space health bar under the player */
+#php{position:absolute;width:calc(var(--u)*3.0);height:calc(var(--u)*.46);border-radius:calc(var(--u)*.4);
+  background:rgba(3,8,10,.55);transform:translate(-50%,0);overflow:hidden;opacity:.9;
+  box-shadow:0 0 0 1px rgba(0,0,0,.35),0 calc(var(--u)*.15) calc(var(--u)*.4) rgba(0,0,0,.45)}
+#phpshield{position:absolute;left:50%;bottom:calc(100% + 3px);transform:translateX(-50%);
+  display:flex;gap:calc(var(--u)*.18);text-decoration:none;pointer-events:none}
+#phpshield b{width:calc(var(--u)*.42);height:calc(var(--u)*.42);border-radius:50%;
+  background:#7dd3fc;box-shadow:0 0 calc(var(--u)*.45) #7dd3fc,0 0 0 1px rgba(0,0,0,.45)}
+
+#php i{display:block;height:100%;width:78%;border-radius:calc(var(--u)*.4);
+  background:linear-gradient(180deg,#7ae59a,#22c55e);transition:width .25s}
+
+#minimap{position:absolute;left:calc(var(--u)*1.5);top:calc(var(--u)*9.6);
+  width:calc(var(--u)*13);height:calc(var(--u)*9);
+  background:linear-gradient(180deg,rgba(16,26,36,.82),rgba(9,16,23,.86));
+  border:1px solid #2c3a4d;border-radius:calc(var(--u)*.7);overflow:hidden;
+  box-shadow:0 calc(var(--u)*.22) 0 rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.07);
+  pointer-events:none;z-index:11}
+#minimap canvas{width:100%;height:100%;display:block}
+
+#threats{position:absolute;inset:0;pointer-events:none;z-index:12}
+.threat{position:absolute;left:0;top:0;width:calc(var(--u)*1.75);height:calc(var(--u)*1.2);
+  clip-path:polygon(100% 50%, 0% 6%, 34% 50%, 0% 94%);
+  background:currentColor;opacity:0;
+  filter:drop-shadow(0 0 calc(var(--u)*.55) currentColor);
+  transition:opacity .12s linear;will-change:transform,opacity}
+
+#perf{position:absolute;left:50%;bottom:calc(var(--u)*3.4);transform:translateX(-50%);
+  font-family:var(--mono,ui-monospace,Menlo,monospace);font-size:calc(var(--u)*.8);letter-spacing:.14em;
+  color:rgba(255,255,255,.55);background:rgba(8,12,18,.6);padding:calc(var(--u)*.3) calc(var(--u)*.8);
+  border-radius:calc(var(--u)*.5);display:none;pointer-events:none;z-index:13}
+#perf.on{display:block}
+
+#flash{position:absolute;inset:0;background:#061018;
+  opacity:0;pointer-events:none;z-index:14}
+
+#toast{position:absolute;left:50%;top:26%;transform:translate(-50%,-14px);opacity:0;
+  font-size:calc(var(--u)*1.9);font-weight:800;letter-spacing:.28em;color:#fff;
+  text-shadow:0 0 calc(var(--u)*2) rgba(74,222,128,.9),0 calc(var(--u)*.2) calc(var(--u)*.6) rgba(0,0,0,.8);
+  transition:opacity .3s,transform .3s;pointer-events:none;white-space:nowrap}
+#toast.on{opacity:1;transform:translate(-50%,0)}
+
+#results{position:absolute;inset:0;display:grid;place-items:center;z-index:16;
+  background:radial-gradient(ellipse at 50% 45%,rgba(10,40,44,.72),rgba(3,7,10,.94));
+  opacity:0;pointer-events:none;transition:opacity .5s}
+#results.on{opacity:1;pointer-events:auto}
+#results .card{text-align:center;padding:calc(var(--u)*2.4) calc(var(--u)*3.2);
+  background:linear-gradient(180deg,rgba(20,34,42,.92),rgba(10,18,24,.94));
+  border:1px solid #2c4a54;border-radius:calc(var(--u)*1.2);
+  box-shadow:0 calc(var(--u)*1.2) calc(var(--u)*3) rgba(0,0,0,.6)}
+#results h2{font-size:calc(var(--u)*3.2);letter-spacing:.3em;margin:0;color:#7ef0d8;font-weight:800;
+  text-shadow:0 0 calc(var(--u)*2.4) rgba(126,240,216,.45)}
+#results .sub{font-size:calc(var(--u)*.9);letter-spacing:.22em;color:rgba(255,255,255,.45);
+  margin:calc(var(--u)*.5) 0 calc(var(--u)*2)}
+#results .stats{display:grid;grid-template-columns:1fr 1fr;gap:calc(var(--u)*1.4) calc(var(--u)*3)}
+#results .stats div{text-align:center}
+#results .stats b{display:block;font-size:calc(var(--u)*2.2);font-weight:800;color:#fff}
+#results .stats span{font-size:calc(var(--u)*.68);letter-spacing:.2em;color:rgba(255,255,255,.4)}
+#rs-board{margin-top:calc(var(--u)*2);text-align:left;min-width:calc(var(--u)*24)}
+.lb-head{display:flex;justify-content:space-between;align-items:baseline;
+  border-bottom:1px solid #2c4a54;padding-bottom:calc(var(--u)*.4);margin-bottom:calc(var(--u)*.6)}
+.lb-head span{font-size:calc(var(--u)*.78);letter-spacing:.24em;color:#7ef0d8;font-weight:800}
+.lb-head em{font-style:normal;font-size:calc(var(--u)*.62);letter-spacing:.16em;color:rgba(255,255,255,.35)}
+#rs-list{list-style:none;margin:0;padding:0;max-height:calc(var(--u)*12);overflow-y:auto}
+#rs-list li{display:grid;grid-template-columns:calc(var(--u)*2) 1fr auto;gap:calc(var(--u)*.6);
+  font-size:calc(var(--u)*.86);padding:calc(var(--u)*.28) 0;color:rgba(255,255,255,.72)}
+#rs-list li b{font-weight:800;color:rgba(255,255,255,.4)}
+#rs-list li i{font-style:normal;font-family:var(--mono,ui-monospace,monospace);color:#bff8ec}
+#rs-list li.me{color:#fff}
+#rs-list li.me b,#rs-list li.me i{color:#7ef0d8}
+#rs-list li.empty{grid-template-columns:1fr;color:rgba(255,255,255,.3);font-size:calc(var(--u)*.72)}
+.lb-entry{display:flex;gap:calc(var(--u)*.6);margin-top:calc(var(--u)*.9)}
+#rs-name{flex:1;font:inherit;font-weight:700;font-size:calc(var(--u)*.84);letter-spacing:.14em;
+  text-transform:uppercase;padding:calc(var(--u)*.55) calc(var(--u)*.9);border-radius:calc(var(--u)*.55);
+  border:1px solid #2c4a54;background:rgba(6,14,18,.7);color:#dff8f2;min-width:0}
+#rs-name::placeholder{color:rgba(255,255,255,.25);letter-spacing:.1em}
+#rs-submit{margin:0!important;font-size:calc(var(--u)*.78)!important;
+  padding:calc(var(--u)*.55) calc(var(--u)*1.1)!important;white-space:nowrap}
+#rs-submit:disabled{opacity:.4;cursor:default;border-color:#2c4a54;color:rgba(255,255,255,.4)}
+
+#results button{margin-top:calc(var(--u)*2.2);font:inherit;font-weight:800;
+  font-size:calc(var(--u)*.95);letter-spacing:.2em;padding:calc(var(--u)*.9) calc(var(--u)*2.4);
+  border-radius:calc(var(--u)*.8);border:2px solid #7ef0d8;background:rgba(126,240,216,.12);
+  color:#bff8ec;cursor:pointer}
+#results button:hover{background:rgba(126,240,216,.24)}
+
+#dead{position:absolute;inset:0;display:grid;place-content:center;justify-items:center;gap:calc(var(--u)*.8);
+  background:radial-gradient(ellipse at 50% 50%,rgba(60,6,6,.55),rgba(3,4,6,.92));
+  opacity:0;pointer-events:none;transition:opacity .45s}
+#dead.on{opacity:1}
+#dead b{font-size:calc(var(--u)*3.4);font-weight:800;letter-spacing:.34em;color:#ff6b6b;
+  text-shadow:0 0 calc(var(--u)*3) rgba(224,53,53,.7)}
+#dead small{font-size:calc(var(--u)*.86);letter-spacing:.3em;color:rgba(255,255,255,.45);font-weight:600}
+
+/* Gun reward offered between floors. */
+/* #hud is pointer-events:none so the game can be clicked through it. Any overlay
+   inside it MUST switch pointer events back on or it is decorative only. */
+#floor-upgrade{position:absolute;inset:0;z-index:18;display:grid;place-items:center;padding:24px;
+  pointer-events:auto;background:rgba(6,12,17,.9);color:#fff}
+#floor-upgrade[hidden]{display:none}
+.floor-upgrade-panel{width:min(1000px,95vw);text-align:center}
+.floor-upgrade-panel h2{margin:0 0 30px;font-size:clamp(28px,3.8vw,46px);letter-spacing:.09em;
+  font-weight:800;color:#fff;text-shadow:0 3px 0 rgba(0,0,0,.45)}
+#floor-upgrade-cards{display:grid;grid-template-columns:repeat(var(--cards,3),1fr);gap:20px}
+#floor-upgrade-reroll{margin-top:22px;font:800 12px var(--f);letter-spacing:.2em;color:#dffcea;
+  background:rgba(74,222,128,.12);border:2px solid #4ade80;border-radius:12px;padding:12px 22px;cursor:pointer;
+  display:inline-flex;align-items:center;gap:10px}
+#floor-upgrade-reroll b{color:#4ade80;font-size:14px}#floor-upgrade-reroll small{color:rgba(255,255,255,.45);font-size:10px;letter-spacing:.14em}
+#floor-upgrade-reroll:hover:not(:disabled){background:rgba(74,222,128,.24)}
+#floor-upgrade-reroll:disabled{opacity:.35;cursor:default}#floor-upgrade-reroll[hidden]{display:none}
+
+/* one solid cartoon yellow, white type, hard bottom edge — same family as the
+   weapon card in the HUD. No transparency, no blur. */
+.floor-upgrade-card{position:relative;display:flex;flex-direction:column;align-items:center;
+  min-height:300px;padding:24px 20px 26px;border:3px solid #fff;border-radius:22px;
+  background:linear-gradient(180deg,#ffc93f,#f0a015);color:#fff;font:inherit;cursor:pointer;
+  text-align:center;box-shadow:0 8px 0 #a4670a,0 20px 34px rgba(0,0,0,.45);
+  transition:transform .12s,box-shadow .12s;text-shadow:0 2px 0 rgba(122,72,4,.42)}
+.floor-upgrade-card:hover,.floor-upgrade-card:focus-visible{transform:translateY(-5px);outline:none;
+  box-shadow:0 13px 0 #a4670a,0 26px 44px rgba(0,0,0,.5)}
+.floor-upgrade-card:active{transform:translateY(4px);box-shadow:0 4px 0 #a4670a,0 10px 20px rgba(0,0,0,.45)}
+
+.upgrade-icon{display:grid;place-items:center;width:94px;height:94px;margin:12px 0 20px;
+  border-radius:26px;background:#e0900d;border:3px solid #fff;color:#fff;
+  box-shadow:0 5px 0 rgba(122,72,4,.45),inset 0 3px 0 rgba(255,255,255,.22)}
+.upgrade-icon svg{width:48px;height:48px;display:block;
+  filter:drop-shadow(0 2px 0 rgba(122,72,4,.4))}
+
+/* The name is a label; the number is the decision. Sizing them the other way
+   round made you read past the thing you are actually choosing on. */
+.floor-upgrade-card strong{font-size:11.5px;letter-spacing:.24em;font-weight:800;
+  color:rgba(255,255,255,.82)}
+.floor-upgrade-card em{margin:7px 0 0;font-style:normal;font-size:25px;font-weight:800;
+  letter-spacing:.02em;color:#fff;line-height:1.1}
+.floor-upgrade-card small{position:relative;margin-top:17px;padding-top:15px;
+  color:rgba(255,255,255,.88);font-size:12px;line-height:1.5;max-width:21ch}
+.floor-upgrade-card small::before{content:"";position:absolute;top:0;left:50%;transform:translateX(-50%);
+  width:46px;height:2px;border-radius:2px;background:rgba(255,255,255,.38)}
+
+@media(max-width:650px){#floor-upgrade{padding:12px}
+  #floor-upgrade-cards[data-cards="4"]{grid-template-columns:repeat(2,1fr)}
+  #floor-upgrade-reroll{margin-top:12px;padding:9px 14px;font-size:10px}
+  .floor-upgrade-panel h2{margin-bottom:16px}
+  #floor-upgrade-cards{gap:10px}
+  .floor-upgrade-card{min-height:228px;padding:16px 8px 14px;border-radius:16px;border-width:2px;
+    box-shadow:0 5px 0 #a4670a,0 12px 22px rgba(0,0,0,.45)}
+  .upgrade-icon{width:58px;height:58px;margin:8px 0 12px;border-radius:17px;border-width:2px}
+  .upgrade-icon svg{width:30px;height:30px}
+  .floor-upgrade-card strong{font-size:9px;letter-spacing:.18em}
+  .floor-upgrade-card em{font-size:16px;margin-top:5px}
+  .floor-upgrade-card small{font-size:9.5px;margin-top:11px;padding-top:10px}
+  .floor-upgrade-card small::before{width:32px}}
+
+/* boot */
+#boot{position:absolute;inset:0;background:#05070a;display:grid;place-items:center;
+  transition:opacity .7s;z-index:20}
+#boot.gone{opacity:0;pointer-events:none}
+#boot div{text-align:center}
+#boot h1{font-size:clamp(22px,4.2vmin,46px);letter-spacing:.42em;margin:0 0 calc(var(--u)*1.4);
+  font-weight:800;color:#5fb6bf;text-indent:.42em}
+#boot p{font-size:calc(var(--u)*.85);letter-spacing:.26em;color:#4a6068;margin:0;font-weight:600}
+#bar{width:min(240px,50vw);height:3px;border-radius:2px;background:#121a22;margin:calc(var(--u)*1.6) auto 0;overflow:hidden}
+#bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,#3f7f88,#7dd3fc);transition:width .3s}
+.hint{position:absolute;bottom:calc(var(--u)*1.6);left:50%;transform:translateX(-50%);
+  font-size:calc(var(--u)*.78);letter-spacing:.22em;font-weight:600;color:rgba(255,255,255,.3);
+  pointer-events:none;transition:opacity .5s}
+
+
+.weap{cursor:pointer;font:inherit}
+#store-hint{position:absolute;bottom:105px;left:20px;max-width:60vw;padding:9px 13px;background:#091c27d9;border-left:2px solid #73ede1;color:#bdece7;font-size:11px;letter-spacing:.06em;pointer-events:none}
+#store-tutorial{position:absolute;top:18%;left:50%;transform:translateX(-50%);width:min(520px,82vw);padding:12px 18px;background:#06151deb;border:1px solid #73ede1;color:#fff;text-align:center;font-size:12px;font-weight:800;letter-spacing:.09em;line-height:1.55;box-shadow:0 0 24px #20dfd43d;pointer-events:none;z-index:8}
+#store-tutorial span{display:block;color:#73ede1;font-size:10px;font-weight:700;letter-spacing:.14em}
+#store-tutorial[hidden]{display:none}
+#armory{width:min(1050px,95vw);max-height:92dvh;overflow:auto;background:#0d1923;color:#e1edf1;border:1px solid #35525f;border-radius:18px;padding:28px;box-shadow:0 25px 100px #000c}
+#armory::backdrop{background:#020a11c9}
+#armory header{display:flex;justify-content:space-between;gap:14px;align-items:center;padding-bottom:18px;border-bottom:1px solid #30444f}
+#armory h2{margin:8px 0 0;font-size:34px;letter-spacing:.05em}#armory h2 span{display:block;font-size:10px;color:#6f909e;letter-spacing:.23em;margin-top:5px}
+#armory p{color:#9bb2bd;font-size:12px;line-height:1.5}#armory small{font-size:9px;letter-spacing:.12em;color:#83a3ae}
+#armory button{font:700 12px var(--f);border:1px solid #42636c;border-radius:7px;background:#213a46;color:#efffff;padding:12px;cursor:pointer;min-height:44px}
+#armory button:focus-visible,.weap:focus-visible{outline:3px solid #a9fff4;outline-offset:3px}
+#armory button:disabled{opacity:.4;cursor:default}
+.armory-wallet{color:#f5d576;font-size:12px;letter-spacing:.06em;margin:18px 0;padding:12px;background:#17232b;border-radius:6px}
+#armory-coins{font-size:22px;margin-right:5px}#gun-list{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.gun-card{display:flex;flex-direction:column;min-width:0;overflow:hidden;border:1px solid #2d4653;border-radius:12px;background:#12232f}
+.gun-card.equipped{border-color:var(--gun);box-shadow:inset 0 3px var(--gun)}
+.gun-card.tutorial-target{animation:tutorialPulse 1.1s ease-in-out infinite;border-color:#73ede1;box-shadow:0 0 0 2px #73ede177,0 0 24px #73ede144}
+@keyframes tutorialPulse{50%{transform:translateY(-4px);box-shadow:0 0 0 3px #73ede199,0 0 32px #73ede166}}
+.weapon-art{background:radial-gradient(ellipse at center,#304854,#10202b 72%);padding:8px 0;border-bottom:1px solid #2c414b}.weapon-art svg{width:100%;height:125px;display:block}
+.gun-info{padding:16px 16px 0}.gun-card h3{font-size:17px;letter-spacing:.04em;margin:9px 0;color:var(--gun)}.gun-card p{min-height:36px;margin:8px 0 14px}
+.gun-actions{margin-top:auto;display:flex;flex-wrap:wrap;gap:7px;padding:16px}.gun-actions button{flex:1}.gun-actions button[data-action="buy"],.gun-actions button[data-action="upgrade"]{background:#cde9df!important;color:#142d2d!important;border-color:transparent!important}
+@media(max-width:760px){#gun-list{grid-template-columns:repeat(2,minmax(0,1fr))}#armory{padding:16px}#armory h2{font-size:26px}}
+@media(max-width:460px){#gun-list{grid-template-columns:1fr}.weapon-art svg{height:130px}.tc{top:68px}#store-hint{bottom:115px;left:12px;max-width:80vw;font-size:10px}}
+.enemy-hp{position:absolute;left:0;top:0;width:34px;height:5px;background:#160e1ee6;border:1px solid #080b12;border-radius:3px;overflow:hidden;pointer-events:none}.enemy-hp i{display:block;height:100%;background:linear-gradient(#ffa8cb,#e44b81);transform-origin:left;transition:transform .1s linear}
+@media(max-width:560px){#armory{padding:16px}#armory h2{font-size:21px}.gun-card{grid-template-columns:60px 1fr;padding:10px}.gun-preview{transform:scale(.8);transform-origin:left}.tc{top:68px}.gun-actions{grid-column:1/-1}}
+.pill{position:relative}.coin-pop{position:absolute;right:0;top:calc(100% + 9px);white-space:nowrap;font-size:12px;font-weight:800;color:#ffe18a;text-shadow:0 2px 6px #000;pointer-events:none;opacity:0}
+
+/* Workshop presentation: the live scene stays visible above a bottom weapon tray. */
+#armory{inset:auto 0 0;margin:0;width:100%;max-width:none;max-height:64dvh;border-radius:16px 16px 0 0;padding:16px 24px;background:#08161eea;border:1px solid #3b5962;box-shadow:0 -15px 60px #0004;animation:shop-rise .35s ease-out}
+#armory::backdrop{background:transparent}#armory header{padding-bottom:8px;border:0}#armory header>div>small,#armory h2 span,#armory>p:not(#armory-status){display:none}
+#armory h2{font-size:23px;margin:0}#armory-close{background:#d95333!important;border:0!important;border-radius:50px!important}
+.armory-wallet{position:absolute;right:135px;top:10px;background:transparent;font-size:0;margin:0;padding:0}.armory-wallet span{font-size:20px;color:#ffe09a}.armory-wallet span:before{content:'● ';color:#f5c518}
+#gun-list{display:flex;overflow-x:auto;gap:12px;padding:8px 0 12px;scroll-snap-type:x proximity;scrollbar-color:#527783 #10232b}
+.gun-card{flex:0 0 clamp(195px,20vw,280px);scroll-snap-align:start;padding:0;background:#18242c}.gun-card.equipped{background:#1c3f35}
+.weapon-art{order:1;padding:0}.weapon-art svg{height:110px}.gun-info{order:0;padding:10px 12px 7px;text-align:center}.weapon-number,.gun-card p{display:none}
+.gun-card h3{font-size:15px;margin:0 0 5px}.gun-actions{order:2;padding:9px;gap:5px}.gun-actions button{padding:9px!important;font-size:11px!important}
+#armory-status{margin:0;min-height:16px}#hud.shopping>.h:not(.tr),#hud.shopping>#php,#hud.shopping>.enemy-hp,#hud.shopping>#store-hint,#hud.shopping>#store-tutorial,#hud.shopping>#toast{visibility:hidden}
+/* Seed Vault shelf under the guns */
+.vault-head{display:flex;align-items:baseline;gap:12px;margin:6px 0 6px;border-top:1px solid #23383f;padding-top:8px}
+.vault-head h3{margin:0;font-size:13px;letter-spacing:.2em;color:#4ade80}.vault-head span{font-size:10px;letter-spacing:.12em;color:#83a3ae}
+.vault-head b{color:#bbf7d0;font-size:14px}.vault-head b:before{content:'◆ '}
+#perk-list{display:flex;overflow-x:auto;gap:10px;padding:2px 0 10px;scrollbar-color:#527783 #10232b}
+.perk-card{flex:0 0 clamp(170px,17vw,230px);display:flex;flex-direction:column;border:1px solid #2d4653;border-radius:10px;background:#12232a;padding:10px}
+.perk-card.owned{border-color:#4ade8088;background:#12302a}
+.perk-card h3{margin:0;font-size:12px;letter-spacing:.08em;color:#bbf7d0}.perk-card small{display:block;margin:4px 0;font-size:9px;color:#86b8a4}
+.perk-card p{margin:0 0 8px;font-size:10px;line-height:1.4;color:#9bb2bd;flex:1}
+.perk-card button{padding:8px!important;font-size:11px!important;min-height:36px!important;background:#1d4b3a!important;border-color:#4ade8055!important}
+.perk-card button:disabled{background:#213a46!important}
+#store-progress{position:absolute;width:54px;height:54px;transform:translate(-50%,-50%);border-radius:50%;background:conic-gradient(#baffeb var(--progress,0deg),#10242dc9 0);padding:5px;pointer-events:none;box-shadow:0 2px 14px #0006}
+#store-progress span{display:grid;place-items:center;height:100%;background:#0b1e29;border-radius:50%;color:#eafffa;font-size:12px;font-weight:800}
+#store-progress[hidden]{display:none}@keyframes shop-rise{from{transform:translateY(45px);opacity:0}to{transform:translateY(0);opacity:1}}
+@media(max-width:560px){#armory{padding:12px;max-height:55dvh}.gun-card{flex-basis:195px}.weapon-art svg{height:90px}#armory h2{font-size:19px}}
+@media(max-height:550px){#armory{max-height:55dvh;padding:8px 16px}.weapon-art svg{height:65px}.gun-card h3{font-size:12px}.gun-info{padding:5px}.gun-actions{padding:5px}#armory h2{font-size:18px}}
+.floor-rooms{font-size:10px;color:#b9e6e4;margin:8px auto 0;max-width:70vw;line-height:1.5;text-shadow:0 2px 4px #000}.xp{width:calc(var(--u)*24)}
+
+/* First-run story. */
+#story{position:absolute;inset:0;z-index:30;display:grid;grid-template-columns:minmax(260px,1.05fr) minmax(300px,.95fr);
+  background:#04080c;overflow:hidden;transition:opacity .42s ease;color:#effcff}
+#story[hidden]{display:none}#story.leaving{opacity:0}
+.story-copy{position:relative;display:flex;flex-direction:column;justify-content:center;padding:clamp(28px,6vw,90px);background:linear-gradient(90deg,#061018cc,#04080c 28%)}
+.story-copy::before{content:"VERDANT / INCIDENT 07";position:absolute;top:6%;left:clamp(28px,6vw,90px);font-size:10px;letter-spacing:.3em;color:#54727c}
+#story-eyebrow{font-size:11px;font-weight:800;letter-spacing:.28em;color:#69dcca;margin-bottom:18px}
+#story-title{margin:0;font-size:clamp(28px,4.2vw,64px);line-height:.98;letter-spacing:.035em;font-weight:800}
+#story-title span{display:block}#story-title span+span{color:#86abae}
+#story-sub{max-width:560px;margin:25px 0 40px;color:#9bb4bb;font-size:clamp(14px,1.35vw,19px);line-height:1.55}
+.story-controls{display:flex;align-items:center;gap:18px}.story-controls button{font:800 11px var(--f);letter-spacing:.16em;color:#eafffa;background:transparent;border:1px solid #3b626a;border-radius:8px;padding:13px 18px;cursor:pointer}
+#story-next{background:#73e7d31c;border-color:#73e7d3}#story-skip{position:absolute;right:4%;top:5%;border:0;color:#71858b}
+#story-step{margin-left:auto;color:#58747c;font-size:11px;letter-spacing:.2em}
+.tile.story-replay{font:800 11px var(--f);color:#bdece7;cursor:pointer;padding:0;border:1px solid var(--tile-b)}
+/* Story presentation is deliberately plain: black, white type, no imagery. */
+#story{display:grid;grid-template-columns:1fr;grid-template-rows:1fr;background:#000;cursor:pointer}
+#story .story-copy{align-items:center;text-align:center;padding:clamp(24px,7vw,100px);background:#000}
+#story .story-copy::before{left:50%;top:7%;transform:translateX(-50%);color:#707070;white-space:nowrap}
+#story-eyebrow{color:#aaa}
+#story-title{max-width:1000px;color:#fff;font-size:clamp(27px,4vw,58px);line-height:1.08}
+#story-title span,#story-title span+span{color:#fff}
+#story-sub{max-width:760px;color:#bdbdbd}
+#story .story-controls{width:min(620px,90vw);justify-content:center}
+#story-next{border:0;background:transparent;color:#fff;padding:14px;animation:story-pulse 1.5s ease-in-out infinite}
+#story-step{position:absolute;bottom:6%;right:6%;color:#777}
+#story-skip{font:700 10px var(--f);letter-spacing:.16em;color:#aaa;background:transparent;border:0;padding:12px;cursor:pointer}
+@keyframes story-pulse{50%{opacity:.45}}
+@media(max-width:720px){#story{grid-template-columns:1fr;grid-template-rows:1fr}#story .story-copy{order:0;padding:28px}.story-copy::before{display:block}}
+
+/* live floor-upgrade timer — a buff you can lose has to be visible losing it */
+#boon{position:absolute;left:50%;top:104px;transform:translateX(-50%);
+  display:flex;align-items:center;gap:8px;padding:7px 14px 7px 10px;border-radius:999px;
+  background:rgba(20,16,4,.82);border:1px solid rgba(251,191,36,.55);
+  box-shadow:0 6px 18px rgba(0,0,0,.4);backdrop-filter:blur(3px);
+  font:800 12px/1 Poppins,system-ui,sans-serif;letter-spacing:.10em;color:#ffe8a3;
+  pointer-events:none;z-index:6}
+#boon i{width:9px;height:9px;border-radius:50%;background:#fbbf24;
+  box-shadow:0 0 9px #fbbf24;animation:boonPulse 1.1s ease-in-out infinite}
+#boon b{font-variant-numeric:tabular-nums;color:#fff;font-size:13px;
+  min-width:20px;text-align:right}
+#boon.low{border-color:rgba(255,107,107,.75);color:#ffd0d0}
+#boon.low i{background:#ff6b6b;box-shadow:0 0 9px #ff6b6b;animation-duration:.42s}
+#boon.low b{color:#ff9b9b}
+@keyframes boonPulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.45;transform:scale(.78)}}
+
+/* boss bar — deliberately unlike the floor progress strip: this is one thing */
+#bossbar{position:absolute;left:50%;top:150px;transform:translateX(-50%);
+  width:min(560px,74vw);pointer-events:none;z-index:6;
+  font:800 11px/1 Poppins,system-ui,sans-serif;letter-spacing:.22em;color:#ffd9ef;
+  text-align:center;text-shadow:0 2px 8px rgba(0,0,0,.7)}
+#bossbar span{display:block;margin-bottom:6px}
+#bossbar .track{position:relative;height:13px;border-radius:999px;overflow:hidden;
+  background:rgba(24,6,18,.82);border:1px solid rgba(255,93,177,.5);
+  box-shadow:0 6px 20px rgba(0,0,0,.45),inset 0 1px 0 rgba(255,255,255,.08)}
+/* u is the lagging "damage taken" ghost, i is the live value */
+#bossbar u{position:absolute;inset:0;width:100%;background:rgba(255,220,240,.35);
+  transition:width .55s cubic-bezier(.2,.7,.3,1)}
+#bossbar i{position:absolute;inset:0;width:100%;z-index:1;
+  background:linear-gradient(90deg,#ff2f9a,#ff8ed0);
+  box-shadow:0 0 14px rgba(255,47,154,.75)}
+
+/* the wildcard hand reads hotter than a normal floor draw */
+#boon.wild{border-color:rgba(255,93,177,.7);color:#ffd9ef}
+#boon.wild i{background:#ff2f9a;box-shadow:0 0 10px #ff2f9a}
+#floor-upgrade.wild .floor-upgrade-card{background:linear-gradient(180deg,#ff59a8,#e0327f)}
+#floor-upgrade.wild .floor-upgrade-card.is-wild{background:linear-gradient(180deg,#8b5cf6,#6d28d9)}
+#floor-upgrade.wild .floor-upgrade-card em{font-size:19px}
+.upgrade-cost{display:block;margin-top:10px;padding-top:9px;
+  border-top:1px solid rgba(255,255,255,.28);
+  font:700 11px/1.45 Poppins,system-ui,sans-serif;letter-spacing:.04em;
+  color:rgba(255,255,255,.9)}
+</style>
+<script type="importmap">
+{"imports":{
+  "three":"./vendor/three.module.min.js",
+  "three/addons/":"./vendor/addons/"
+}}
+</script>
+</head>
+<body>
+<div id="app">
+  <canvas id="c"></canvas>
+
+  <div id="hud">
+    <div class="h tl">
+      <button class="tile story-replay" id="story-replay" aria-label="Replay story" title="Replay story">STORY</button>
+      <button class="tile snd" id="snd" aria-label="Mute sound" aria-pressed="true" style="font:inherit;color:inherit;padding:0">♪</button>
+    </div>
+
+    <div class="h tc">
+      <div class="xp"><i id="xpfill"></i><span id="xplabel">MODULE 01 · CRYO BAY</span></div>
+      <div class="pips" id="pips"></div>
+      <div class="rem" id="rem">GROWTH REMAINING&nbsp;&nbsp;0</div>
+    </div>
+
+    <div class="h tr">
+      <div class="cur">
+        <div class="pill"><div class="coin"></div><div class="num" id="biomass">0</div></div>
+        <div class="pill"><div class="coin g"></div><div class="num" id="vault">0</div></div>
+      </div>
+    </div>
+
+    <div class="h rc">
+      <div class="res">
+        <div class="row" title="Gems found this run"><div class="tile" style="color:#4ade80">◆</div><b id="salvage">0</b></div>
+        <div class="row" id="revive-row" title="Second Wind charges" hidden><div class="tile" style="color:#ff6b6b">✚</div><b id="medkit">0</b></div>
+      </div>
+    </div>
+
+    <div class="h br">
+      <button class="weap" id="armory-open" aria-label="Locate armory station" title="Find armory (B)">
+        <svg viewBox="0 0 48 48" fill="#1d232b"><rect x="4" y="19" width="27" height="10" rx="2.5"/>
+        <rect x="29" y="21" width="16" height="5" rx="2"/><rect x="10" y="27" width="7" height="12" rx="2.5"/>
+        <rect x="19" y="12.5" width="9" height="6.5" rx="2"/></svg>
+      </button>
+      <div class="wname" id="weapon-name">PRUNING LASER</div>
+    </div>
+
+    <div id="store-progress" hidden><span>2s</span></div>
+    <div id="store-hint">ARMORY · Cyan pad beside the entrance</div>
+    <div id="store-tutorial" hidden><span>FIRST OBJECTIVE</span>FOLLOW THE CYAN PATH · STAND ON THE ARMORY PAD · UPGRADE YOUR PRUNING LASER</div>
+    <div id="boon" hidden><i></i><span></span><b>30</b></div>
+    <div id="bossbar" hidden><span>HEARTROOT</span><div class="track"><i></i><u></u></div></div>
+    <div id="threats"></div>
+    <div id="perf">–</div>
+    <div id="flash"></div>
+    <div id="toast"></div>
+    <div id="results"><div class="card">
+      <h2>EXTRACTED</h2>
+      <p class="sub">You got off VERDANT alive.</p>
+      <div class="stats">
+        <div><b id="rs-floors">0</b><span>FLOORS CLEARED</span></div>
+        <div><b id="rs-kills">0</b><span>GROWTH KILLED</span></div>
+        <div><b id="rs-coins">0</b><span>COINS EARNED</span></div>
+        <div><b id="rs-gems" style="color:#4ade80">0</b><span>GEMS BANKED</span></div>
+        <div><b id="rs-time">0:00</b><span>RUN TIME</span></div>
+      </div>
+      <div id="rs-board">
+        <div class="lb-head"><span>FASTEST ESCAPES</span><em id="rs-scope">THIS DEVICE</em></div>
+        <ol id="rs-list"></ol>
+        <div class="lb-entry">
+          <input id="rs-name" maxlength="12" placeholder="YOUR CALLSIGN" autocomplete="off" spellcheck="false">
+          <button id="rs-submit">SUBMIT TIME</button>
+        </div>
+      </div>
+      <button id="rs-again">RUN AGAIN</button>
+    </div></div>
+    <div id="dead"><b>SIGNAL LOST</b><small>REBOOTING SUIT</small></div>
+    <section id="floor-upgrade" hidden aria-label="Choose a weapon upgrade">
+      <div class="floor-upgrade-panel">
+        <h2>CHOOSE AN UPGRADE</h2>
+        <div id="floor-upgrade-cards"></div>
+        <button id="floor-upgrade-reroll" hidden>REROLL</button>
+      </div>
+    </section>
+    <div id="php"><i id="phpfill"></i><u id="phpshield"></u></div>
+    <div id="stick"><i></i></div>
+    <div class="hint" id="hint">WASD / ARROWS &nbsp;·&nbsp; DRAG TO MOVE</div>
+  </div>
+
+  <dialog id="armory" aria-labelledby="armory-title">
+    <header><div><small>VERDANT / FIELD SUPPLY DIVISION</small><h2 id="armory-title">THE ARMORY<span>05 WEAPON SYSTEMS</span></h2></div><button id="armory-close" aria-label="Close armory">Resume ×</button></header>
+    <p>Station connected. Select your weapon. Every upgrade adds 25% of base damage.</p>
+    <div class="armory-wallet"><span id="armory-coins">0</span> COINS · PURCHASES SAVED ON THIS DEVICE</div>
+    <div id="gun-list"></div>
+    <div class="vault-head"><h3>SEED VAULT</h3><span><b id="armory-gems">0</b> GEMS · PERMANENT SUIT PERKS · KEPT THROUGH DEATH</span></div>
+    <div id="perk-list"></div><p id="armory-status" role="status" aria-live="polite"></p>
+  </dialog>
+  <section id="story" aria-live="polite" aria-label="Verdant introduction" hidden>
+    <div class="story-copy">
+      <button id="story-skip">SKIP</button>
+      <div id="story-eyebrow">BEFORE THE FALL</div>
+      <h1 id="story-title"></h1>
+      <p id="story-sub"></p>
+      <div class="story-controls">
+        <button id="story-next">TAP TO CONTINUE</button>
+        <span id="story-step">01 / 04</span>
+      </div>
+    </div>
+  </section>
+  <div id="boot"><div>
+    <h1>VERDANT</h1>
+    <p>STATION LINK ESTABLISHING</p>
+    <div id="bar"><i></i></div>
+  </div></div>
+</div>
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
