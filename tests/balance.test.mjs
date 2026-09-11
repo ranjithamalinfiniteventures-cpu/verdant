@@ -59,6 +59,26 @@ assert.ok(ttk(20) <= 1.05,
 // and the climb must still be a climb
 assert.ok(ttk(20) > ttk(1) * 1.4, 'the top must be meaningfully tougher per enemy than the bottom');
 
+/* No single floor may be a wall. Floor 6 once carried 3.7x the enemy health of
+   floor 5 and more than floors 7 and 9 — the run stalled there. Compare each
+   floor's total health against the mean of its neighbours. */
+{
+  const HP = { creeper:3, stalker:6, sporeling:2, thornbeast:14, bloomer:16, seeder:4 };
+  const load = (i) => {
+    const F = FLOORS[i], w = F.mix.reduce((a, [, x]) => a + x, 0);
+    return F.mix.reduce((a, [k, x]) => a + HP[k] * x, 0) / w * F.total * floorHpScale(i);
+  };
+  // the top floor is deliberately light (the boss is the fight there), so the
+  // floor beneath it is judged against the floor below it only
+  const last = FLOORS.length - 1;
+  for (let i = 1; i < last; i++){
+    const ratio = i === last - 1
+      ? load(i) / load(i - 1)
+      : load(i) / ((load(i - 1) + load(i + 1)) / 2);
+    assert.ok(ratio < 1.6,
+      `floor ${i + 1} (${FLOORS[i].name}) is a wall: ${ratio.toFixed(2)}x its neighbours' average health`);
+  }
+}
 assert.ok(floorDamageScale(19, 3) <= 2.4, 'damage is capped at 2.4x');
 assert.ok(0.07 * 2.4 < 0.25, 'one creeper hit never takes more than a quarter bar');
 const floor5Hp = 1 + 4 * 0.18;

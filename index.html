@@ -367,6 +367,22 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
 .perk-card p{margin:0 0 8px;font-size:10px;line-height:1.4;color:#9bb2bd;flex:1}
 .perk-card button{padding:8px!important;font-size:11px!important;min-height:36px!important;background:#1d4b3a!important;border-color:#4ade8055!important}
 .perk-card button:disabled{background:#213a46!important}
+/* Medbay: a health-for-coins shop, deliberately styled like a warning rather
+   than the calm green of the vault — this is a costly rescue, not a perk. */
+.medbay-head{display:flex;align-items:baseline;gap:12px;margin:6px 0 6px;border-top:1px solid #23383f;padding-top:8px}
+.medbay-head h3{margin:0;font-size:13px;letter-spacing:.2em;color:#ff8c72}
+.medbay-head span{font-size:10px;letter-spacing:.12em;color:#b38a83}
+#medbay{padding:2px 0 10px}
+.medbay-card{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;
+  border:1px solid #4a3230;border-radius:10px;background:#241615;padding:12px 14px}
+.medbay-card.full{opacity:.55}
+.medbay-card h3{margin:0;font-size:13px;letter-spacing:.08em;color:#ffd9c9}
+.medbay-card small{display:block;margin:3px 0;font-size:10px;color:#e0a99a}
+.medbay-card p{margin:4px 0 0;font-size:9px;line-height:1.4;color:#b38a83;max-width:360px}
+.medbay-card button{flex:0 0 auto;padding:10px 16px!important;font-size:11px!important;
+  background:#5a2a20!important;border-color:#ff8c7255!important}
+.medbay-card button:disabled{background:#2c1c1a!important;color:#7a6058!important}
+
 #store-progress{position:absolute;width:54px;height:54px;transform:translate(-50%,-50%);border-radius:50%;background:conic-gradient(#baffeb var(--progress,0deg),#10242dc9 0);padding:5px;pointer-events:none;box-shadow:0 2px 14px #0006}
 #store-progress span{display:grid;place-items:center;height:100%;background:#0b1e29;border-radius:50%;color:#eafffa;font-size:12px;font-weight:800}
 #store-progress[hidden]{display:none}@keyframes shop-rise{from{transform:translateY(45px);opacity:0}to{transform:translateY(0);opacity:1}}
@@ -418,6 +434,23 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
 #boon.low i{background:#ff6b6b;box-shadow:0 0 9px #ff6b6b;animation-duration:.42s}
 #boon.low b{color:#ff9b9b}
 @keyframes boonPulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.45;transform:scale(.78)}}
+
+/* mercy: this used to only announce itself through a toast that got stomped
+   0.75s later by the ordinary floor-name toast, so nobody ever saw it fire.
+   A persistent badge means it no longer depends on catching a toast at all —
+   it counts down while you're dying on this floor, then confirms the buff. */
+#mercy{position:absolute;left:50%;top:104px;transform:translateX(-50%);
+  display:flex;align-items:center;gap:8px;padding:7px 14px;border-radius:999px;
+  background:rgba(10,18,14,.82);border:1px solid rgba(74,222,128,.55);
+  box-shadow:0 6px 18px rgba(0,0,0,.4);backdrop-filter:blur(3px);
+  font:800 11px/1 Poppins,system-ui,sans-serif;letter-spacing:.08em;color:#bbf7d0;
+  pointer-events:none;z-index:6;max-width:min(420px,80vw)}
+#mercy i{width:9px;height:9px;border-radius:50%;background:#4ade80;flex:none;
+  box-shadow:0 0 9px #4ade80}
+#mercy.active i{animation:boonPulse 1.1s ease-in-out infinite}
+/* stacks below whichever badges above it are currently showing */
+#boon:not([hidden]) ~ #mercy{top:150px}
+#bossbar:not([hidden]) ~ #mercy{top:196px}
 
 /* boss bar — deliberately unlike the floor progress strip: this is one thing */
 #bossbar{position:absolute;left:50%;top:150px;transform:translateX(-50%);
@@ -497,6 +530,7 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
     <div id="store-tutorial" hidden><span>FIRST OBJECTIVE</span>FOLLOW THE CYAN PATH · STAND ON THE ARMORY PAD · UPGRADE YOUR PRUNING LASER</div>
     <div id="boon" hidden><i></i><span></span><b>30</b></div>
     <div id="bossbar" hidden><span>HEARTROOT</span><div class="track"><i></i><u></u></div></div>
+    <div id="mercy" hidden><i></i><span></span></div>
     <div id="threats"></div>
     <div id="perf">–</div>
     <div id="flash"></div>
@@ -539,6 +573,8 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
     <p>Station connected. Select your weapon. Every upgrade adds 25% of base damage.</p>
     <div class="armory-wallet"><span id="armory-coins">0</span> COINS · PURCHASES SAVED ON THIS DEVICE</div>
     <div id="gun-list"></div>
+    <div class="medbay-head"><h3>MEDBAY</h3><span>PATCH UP WITH COINS · PRICE CLIMBS EACH USE THIS RUN</span></div>
+    <div id="medbay"></div>
     <div class="vault-head"><h3>SEED VAULT</h3><span><b id="armory-gems">0</b> GEMS · PERMANENT SUIT PERKS · KEPT THROUGH DEATH</span></div>
     <div id="perk-list"></div><p id="armory-status" role="status" aria-live="polite"></p>
   </dialog>

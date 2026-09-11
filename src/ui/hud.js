@@ -164,6 +164,29 @@ export class Hud {
       el.classList.toggle('wild', !!boon.permanent);
     }
   }
+  /* Mercy used to announce itself only through a toast — and that toast got
+     silently overwritten 0.75s later by the ordinary floor-name toast, so it
+     effectively never showed. This is a persistent badge instead: it counts
+     down while dying repeatedly on the current floor, then names the buff
+     once one lands, with no dependency on catching a toast in time.
+     @param info {null | {until:number} | {names:string[]}} */
+  setMercy(info){
+    const el = this.el.mercy || (this.el.mercy = document.getElementById('mercy'));
+    if (!el) return;
+    if (!info){
+      if (!el.hidden){ el.hidden = true; this._mercyKey = null; }
+      return;
+    }
+    const key = info.names ? 'on:' + info.names.join(',') : 'cd:' + info.until;
+    if (this._mercyKey === key) return;
+    this._mercyKey = key;
+    el.hidden = false;
+    el.classList.toggle('active', !!info.names);
+    el.querySelector('span').textContent = info.names
+      ? `MERCY ACTIVE · ${info.names.join(' · ')}`
+      : `${info.until} MORE DEATH${info.until === 1 ? '' : 'S'} HERE → FREE BONUS`;
+  }
+
   /** Second Wind charges left this run; the row hides when the perk isn't owned. */
   setRevives(n){
     const row = document.getElementById('revive-row');
@@ -224,11 +247,30 @@ export class Hud {
     for (let i = count; i < this.enemyBars.length; i++) this.enemyBars[i].hidden = true;
   }
 
+  /* Toasts used to just overwrite each other: whichever call landed last won,
+     with no regard for whether the previous one had anything left to say. That
+     silently ate the mercy-bonus toast on every death retry — it fires, then
+     the ordinary "FLOOR 6 · NAME" toast stomps it 0.75s later, well before its
+     own 2.8s were up. Now a toast queues behind whatever is already showing
+     instead of cutting it off. */
   toast(text, ms = 1900){
+    this._toastQ = this._toastQ || [];
+    if (this.el.toast.classList.contains('on')){
+      this._toastQ.push({ text, ms });
+      return;
+    }
+    this._showToast(text, ms);
+  }
+
+  _showToast(text, ms){
     this.el.toast.textContent = text;
     this.el.toast.classList.add('on');
     clearTimeout(this._t);
-    this._t = setTimeout(() => this.el.toast.classList.remove('on'), ms);
+    this._t = setTimeout(() => {
+      this.el.toast.classList.remove('on');
+      const next = this._toastQ && this._toastQ.shift();
+      if (next) setTimeout(() => this._showToast(next.text, next.ms), 260);   // a beat of blank between messages
+    }, ms);
   }
 
   /* Press P for a frame-time readout — the only way to get a real number off

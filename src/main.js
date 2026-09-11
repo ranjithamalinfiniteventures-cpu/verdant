@@ -45,6 +45,23 @@ const MERCY_BUFFS = [
 ];
 let mercyActive = [];   // { buff, revertData } entries for the current floor
 
+/* Drives the persistent #mercy badge — see hud.setMercy() for why this exists
+   instead of relying on the toast. Called after every event that changes what
+   it should say: a death, mercy firing, or leaving the floor. */
+function updateMercyHud(){
+  if (mercyActive.length){
+    hud.setMercy({ names: mercyActive.map(m => m.buff.name.split(' · ')[1] || m.buff.name) });
+    return;
+  }
+  // stay quiet on a floor with zero deaths so far — the badge is forgiveness
+  // for a floor that's going badly, not an ambient invitation to die for loot
+  if (state.floorDeaths <= 0){ hud.setMercy(null); return; }
+  const next = state.floorDeaths < 3 ? 3 - state.floorDeaths
+             : state.floorDeaths < 6 ? 6 - state.floorDeaths
+             : 0;
+  hud.setMercy(next > 0 ? { until: next } : null);
+}
+
 function applyMercy(){
   // pick a buff that hasn't been used this floor
   const used = new Set(mercyActive.map(m => m.buff.id));
@@ -56,6 +73,7 @@ function applyMercy(){
   assistedRun = true;
   hud.toast(buff.name, 2800);
   audio.confirm();
+  updateMercyHud();
 }
 
 function revertMercy(){
@@ -66,6 +84,7 @@ function revertMercy(){
     // shield is consumed — nothing to revert
   }
   mercyActive = [];
+  updateMercyHud();
 }
 
 function applyPowerBuffs(){
@@ -111,6 +130,7 @@ if (POWER_TEST){
   applyPowerBuffs();
 }
 armory.vault = vault;
+armory.hud = hud;   // lets buyHeal() reflect the new HP bar immediately
 const storeTutorial = new StoreTutorial(engine.scene, armory);
 const floorUpgrades = new FloorUpgrades({ weapon, player, loot, vault });
 vault.onChange = n => { hud.setCounts({ vault: n }); armory.updateWallet(); };
@@ -125,6 +145,13 @@ function applyPerks(newFloor){
   loot.perkMul = vault.coinMul;
   if (newFloor) player.shield = Math.max(player.shield, vault.startShield);
   if (newFloor && POWER_TEST) player.shield = Math.max(player.shield, 10);
+  /* Second Wind used to be a once-per-RUN charge, so using it on floor 3 left
+     floors 4-20 with no safety net at all. It is now a once-per-FLOOR one:
+     every floor entry — a fresh floor or a retry after dying — refills it,
+     the same moment shield tops up above. Buying it mid-floor still goes
+     through the `id === 'revive'` branch in armory.onPerk instead, which is
+     usable immediately without waiting for the next floor. */
+  if (newFloor) state.run.revives = vault.revives;
   hud.setRevives(state.run.revives);
 }
 document.getElementById('story-replay').addEventListener('click', e => {
@@ -240,6 +267,7 @@ function loadModule(i){
 
 function restartRun(){
   floorUpgrades.reset();
+  armory.resetRun();
   if (POWER_TEST) applyPowerBuffs();
   guide.disarm();
   hud.setBoon(null);
@@ -273,6 +301,7 @@ function startModule(i){
 
   // mercy: grant a small buff at 3 and 6 deaths on the same floor
   if (state.floorDeaths === 3 || state.floorDeaths === 6) applyMercy();
+  else updateMercyHud();
 }
 
 /* Spawn on the perimeter, never in the player's lap and never inside geometry.
@@ -608,6 +637,7 @@ function fight(dt){
       } else if (player.hp <= 0){
         state.phase = 'dead'; state.phaseT = 0;
         state.floorDeaths++;
+        updateMercyHud();
         audio.dead();
         audio.duck(0.35, 1.6);
         hud.setDead(true);
@@ -664,8 +694,10 @@ function transition(dt, dir){
         return;
       }
       state.run.floors++;
-      revertMercy();
+      // reset the count BEFORE reverting, so revertMercy's updateMercyHud()
+      // computes off the new floor's zero rather than the old floor's tally
       state.floorDeaths = 0;
+      revertMercy();
       loadModule(next);
       state.phase = 'enter'; state.phaseT = 0; state.seal = 0;
       player.invuln = 0.9;

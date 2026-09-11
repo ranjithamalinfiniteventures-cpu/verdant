@@ -16,7 +16,7 @@ export const FLOORS = [
     rooms: ['GROWTH LAB', 'SEED VAULT', 'HYDROPONICS'],
     mix: [['creeper', 3], ['sporeling', 2]] },
 
-  { name: 'MACHINE DECK', machine: 'turbine', plan: 'triptych',  w: 56, d: 22, total: 46, maxAlive: 17, interval: 0.80,
+  { name: 'MACHINE DECK', machine: 'turbine', plan: 'triptych',  w: 56, d: 22, total: 40, maxAlive: 16, interval: 0.82,
     accent: 0xff8c42, tint: 0xfff1e2, cove: 0xffe4c8, layout: 'spine',
     rooms: ['PUMP ROOM', 'TURBINE HALL', 'COOLANT BAY'],
     mix: [['creeper', 4], ['stalker', 1], ['thornbeast', 1]] },
@@ -34,7 +34,11 @@ export const FLOORS = [
   { name: 'REACTOR TIER', machine: 'reactor', plan: 'spinehall', w: 58, d: 32, total: 70, maxAlive: 24, interval: 0.60,
     accent: 0xf59e0b, tint: 0xfff0cf, cove: 0xffdda0, layout: 'scatter',
     rooms: ['CONTROL', 'FUEL STORE', 'CORE ACCESS', 'HEAT SINK'],
-    mix: [['creeper', 3], ['thornbeast', 2], ['stalker', 1], ['bloomer', 1]] },
+    /* Was 3 creeper / 2 thornbeast / 1 stalker / 1 bloomer: 43% tanks and 3.7x the
+       health of floor 5 — tougher than floors 7 and 9, so the whole run stalled
+       here. Thornbeasts stay as this floor's idea, one in the rotation, with
+       fast fragile sporelings for pressure instead of more bulk. */
+    mix: [['creeper', 5], ['thornbeast', 1], ['stalker', 1], ['sporeling', 2]] },
 
   { name: 'ARCHIVE', machine: 'servers',      plan: 'triptych',  w: 54, d: 26, total: 80, maxAlive: 26, interval: 0.55,
     accent: 0xa855f7, tint: 0xf3e8ff, cove: 0xe9d5ff, layout: 'lanes',
@@ -54,55 +58,55 @@ export const FLOORS = [
     rooms: ['TELESCOPE HALL', 'STAR CHART', 'SIGNAL ROOM', 'DOME ACCESS'],
     mix: [['creeper', 3], ['sporeling', 3], ['stalker', 2], ['seeder', 1], ['bloomer', 1]] },
 
-  { name: 'HEARTROOT CANOPY', machine: 'planters', plan: 'spinehall', w: 58, d: 34, total: 118, maxAlive: 32, interval: 0.42,
+  { name: 'HEARTROOT CANOPY', machine: 'planters', plan: 'spinehall', w: 58, d: 34, total: 110, maxAlive: 32, interval: 0.42,
     accent: 0xf472b6, tint: 0xffe1f0, cove: 0xffc9e6, layout: 'lanes',
     rooms: ['ROOT WELL', 'BLOOM GALLERY', 'SPORE LOFT', 'LANDING PAD'],
-    mix: [['creeper', 2], ['thornbeast', 2], ['seeder', 2], ['sporeling', 2], ['stalker', 2], ['bloomer', 2]] },
+    mix: [['creeper', 3], ['thornbeast', 1], ['seeder', 2], ['sporeling', 3], ['stalker', 2], ['bloomer', 1]] },
 
   /* The upper tower, 11–20. Pressure keeps rising through population and
      spawn tempo; the health/damage curve in main.js bends so it stays beatable.
      Every floor below 20 leans on one lesson — the mix says which. */
-  { name: 'GARDEN DECK', machine: 'planters',   plan: 'suite',     w: 56, d: 30, total: 124, maxAlive: 33, interval: 0.41,
+  { name: 'GARDEN DECK', machine: 'planters',   plan: 'suite',     w: 56, d: 30, total: 114, maxAlive: 33, interval: 0.41,
     accent: 0x86efac, tint: 0xe3ffe9, cove: 0xc8ffd6, layout: 'hydro',
     rooms: ['TERRACE', 'ORCHARD', 'POLLEN HOUSE'],
     mix: [['creeper', 3], ['sporeling', 4], ['seeder', 2], ['stalker', 1]] },
 
-  { name: 'FILTRATION', machine: 'turbine',     plan: 'triptych',  w: 58, d: 26, total: 130, maxAlive: 34, interval: 0.40,
+  { name: 'FILTRATION', machine: 'turbine',     plan: 'triptych',  w: 58, d: 26, total: 118, maxAlive: 34, interval: 0.40,
     accent: 0x7dd3fc, tint: 0xe6f7ff, cove: 0xcdefff, layout: 'spine',
     rooms: ['INTAKE', 'SCRUBBERS', 'OUTFLOW'],
-    mix: [['creeper', 3], ['thornbeast', 3], ['stalker', 2], ['sporeling', 1]] },
+    mix: [['creeper', 4], ['thornbeast', 2], ['stalker', 2], ['sporeling', 2]] },
 
-  { name: 'QUARANTINE', machine: 'cryopods',    plan: 'quad',      w: 54, d: 34, total: 136, maxAlive: 35, interval: 0.39,
+  { name: 'QUARANTINE', machine: 'cryopods',    plan: 'quad',      w: 54, d: 34, total: 122, maxAlive: 35, interval: 0.39,
     accent: 0xfca5a5, tint: 0xffe9e9, cove: 0xffd0d0, layout: 'island',
     rooms: ['ISOLATION A', 'ISOLATION B', 'DECON', 'MORGUE'],
     mix: [['creeper', 3], ['bloomer', 2], ['sporeling', 3], ['seeder', 1]] },
 
-  { name: 'OVERGROWN LABS', machine: 'servers', plan: 'spinehall', w: 58, d: 34, total: 142, maxAlive: 36, interval: 0.38,
+  { name: 'OVERGROWN LABS', machine: 'servers', plan: 'spinehall', w: 58, d: 34, total: 126, maxAlive: 36, interval: 0.38,
     accent: 0xa3e635, tint: 0xf1ffd6, cove: 0xe4ffb8, layout: 'scatter',
     rooms: ['WET LAB', 'SEQUENCERS', 'INCUBATORS', 'SAMPLE STORE'],
     mix: [['creeper', 3], ['stalker', 3], ['thornbeast', 2], ['seeder', 2], ['sporeling', 2]] },
 
-  { name: 'SIGNAL SPIRE', machine: 'servers',   plan: 'corridor',  w: 58, d: 28, total: 148, maxAlive: 37, interval: 0.37,
+  { name: 'SIGNAL SPIRE', machine: 'servers',   plan: 'corridor',  w: 58, d: 28, total: 130, maxAlive: 37, interval: 0.37,
     accent: 0xfde68a, tint: 0xfff7d6, cove: 0xffefb3, layout: 'lanes',
     rooms: ['RELAY', 'ANTENNA BAY', 'UPLINK'],
     mix: [['creeper', 3], ['sporeling', 3], ['thornbeast', 3], ['bloomer', 1], ['stalker', 2]] },
 
-  { name: 'ROOT FORGE', machine: 'reactor',     plan: 'triptych',  w: 58, d: 28, total: 154, maxAlive: 38, interval: 0.36,
+  { name: 'ROOT FORGE', machine: 'reactor',     plan: 'triptych',  w: 58, d: 28, total: 134, maxAlive: 38, interval: 0.36,
     accent: 0xfb923c, tint: 0xffe9d6, cove: 0xffd3ad, layout: 'spine',
     rooms: ['CRUCIBLE', 'CASTING HALL', 'SLAG PIT'],
-    mix: [['creeper', 2], ['thornbeast', 4], ['stalker', 3], ['bloomer', 2]] },
+    mix: [['creeper', 4], ['thornbeast', 2], ['stalker', 3], ['bloomer', 1], ['sporeling', 2]] },
 
-  { name: 'CANOPY LIFTS', machine: 'cargo',     plan: 'quad',      w: 54, d: 34, total: 160, maxAlive: 39, interval: 0.35,
+  { name: 'CANOPY LIFTS', machine: 'cargo',     plan: 'quad',      w: 54, d: 34, total: 138, maxAlive: 39, interval: 0.35,
     accent: 0xc4b5fd, tint: 0xefeaff, cove: 0xdcd2ff, layout: 'lanes',
     rooms: ['LIFT LOBBY', 'WINCH ROOM', 'FREIGHT CAGE', 'GANTRY'],
     mix: [['creeper', 3], ['seeder', 3], ['sporeling', 3], ['stalker', 2], ['thornbeast', 2]] },
 
-  { name: 'SPORE CATHEDRAL', machine: 'planters', plan: 'suite',   w: 58, d: 32, total: 166, maxAlive: 40, interval: 0.34,
+  { name: 'SPORE CATHEDRAL', machine: 'planters', plan: 'suite',   w: 58, d: 32, total: 142, maxAlive: 40, interval: 0.34,
     accent: 0xf0abfc, tint: 0xfbe8ff, cove: 0xf5ccff, layout: 'hydro',
     rooms: ['NAVE', 'CHOIR', 'CRYPT'],
     mix: [['creeper', 3], ['bloomer', 2], ['sporeling', 4], ['seeder', 2], ['stalker', 2]] },
 
-  { name: 'HEARTROOT THROAT', machine: 'reactor', plan: 'spinehall', w: 58, d: 34, total: 172, maxAlive: 41, interval: 0.33,
+  { name: 'HEARTROOT THROAT', machine: 'reactor', plan: 'spinehall', w: 58, d: 34, total: 146, maxAlive: 41, interval: 0.33,
     accent: 0xf43f5e, tint: 0xffe1e6, cove: 0xffc2cc, layout: 'scatter',
     rooms: ['ARTERY', 'VALVE HALL', 'PULSE CHAMBER', 'MARROW'],
     mix: [['creeper', 2], ['thornbeast', 3], ['stalker', 3], ['seeder', 2], ['sporeling', 3], ['bloomer', 2]] },

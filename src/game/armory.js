@@ -1,6 +1,7 @@
 import { gunIllustration } from './gun-designs.js';
 import { GUNS } from './weapons.js';
 import { PERKS } from './vault.js';
+import { audio } from '../core/audio.js';
 
 const KEY = 'verdant.armory.v1';
 export const FIRST_UPGRADE_COST = 120;
@@ -8,6 +9,7 @@ export class Armory {
   constructor(weapon, player, input){
     this.weapon = weapon; this.player = player; this.input = input;
     this.coins = 0; this.levels = { laser:1 }; this.selected = 'laser';
+    this.healsThisRun = 0;   // resets each run; see resetRun()
     let hasSave = false;
     try {
       const saved = JSON.parse(localStorage.getItem(KEY));
@@ -35,6 +37,10 @@ export class Armory {
     this.perkList?.addEventListener('click', e => {
       const button = e.target.closest('button[data-perk]');
       if (button) this.buyPerk(button.dataset.perk);
+    });
+    this.medbayEl = document.getElementById('medbay');
+    this.medbayEl?.addEventListener('click', e => {
+      if (e.target.closest('button[data-medbay]')) this.buyHeal();
     });
     this.apply(); this.render();
   }
@@ -93,6 +99,50 @@ export class Armory {
       </article>`;
     }).join('');
   }
+  /** Full-health cost this run: pay for what's missing, and it climbs steeply
+      each time you lean on it — otherwise coins would just trivialise every
+      hard floor instead of being a genuine, occasional bail-out. */
+  healCost(){
+    const missing = Math.max(0, 1 - this.player.hp);
+    return Math.max(30, Math.round(260 * missing)) * (1 + this.healsThisRun);
+  }
+  renderMedbay(){
+    if (!this.medbayEl) return;
+    const missing = 1 - this.player.hp;
+    const full = missing <= 0.001;
+    const cost = this.healCost();
+    this.medbayEl.innerHTML = `
+      <article class="medbay-card ${full ? 'full' : ''}">
+        <div class="medbay-info">
+          <h3>PATCH UP</h3>
+          <small>${full ? 'SUIT AT FULL INTEGRITY' : `RESTORE TO FULL · ${Math.round(missing * 100)}% DAMAGE`}</small>
+          <p>${this.healsThisRun
+            ? `Price climbs the more you lean on it — this would be patch #${this.healsThisRun + 1} this run.`
+            : 'A steep price for skipping the risk. Fine in a pinch; costly as a habit.'}</p>
+        </div>
+        <button data-medbay="heal" ${full || this.coins < cost ? 'disabled' : ''}>
+          ${full ? 'Full health' : `Patch up · ${cost} coins`}
+        </button>
+      </article>`;
+  }
+  buyHeal(){
+    if (!this.paused) return false;
+    const cost = this.healCost();
+    if (this.player.hp >= 0.999 || this.coins < cost) return false;
+    this.coins -= cost;
+    this.player.heal(1);
+    this.healsThisRun++;
+    this.hud?.setHp(this.player.hp);
+    this.status.textContent = `Suit patched to full — ${cost} coins.`;
+    audio.confirm();
+    this.render();
+    this.save();
+    return true;
+  }
+  /** Coins persist through death, but a heal bought this run must not make
+      the next run cheaper — called from restartRun(). */
+  resetRun(){ this.healsThisRun = 0; }
+
   cost(id){
     const gun = GUNS.find(g => g.id === id);
     const level = this.levels[id] || 1;
@@ -130,6 +180,7 @@ export class Armory {
   render(){
     this.updateWallet();
     this.renderPerks();
+    this.renderMedbay();
     this.cards.innerHTML = GUNS.map(g => {
       const level = this.levels[g.id] || 0, cost = this.cost(g.id);
       const tutorialTarget = this.tutorialActive && g.id === 'laser' && level === 1 ? ' tutorial-target' : '';
