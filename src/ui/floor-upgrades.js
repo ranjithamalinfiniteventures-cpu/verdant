@@ -171,6 +171,8 @@ export class FloorUpgrades {
     this.levels = {};
     this.offer = [];
     this.active = [];
+    this.permanent = false;   // true in the endless pit
+    this.mode = 'floor';      // 'floor' | 'wild' | 'mercy'
     this.rerolls = 0;
     this.rerollBtn?.addEventListener('click', () => this.reroll());
 
@@ -214,7 +216,7 @@ export class FloorUpgrades {
 
   reroll(){
     if (!this.paused || !this.vault) return false;
-    if (this.mode === 'wild') return false;   // the boss hand is not negotiable
+    if (this.mode !== 'floor') return false;  // wildcard and mercy hands are not negotiable
     if (!this.vault.spend(this.rerollCost)) { audio.tap(); return false; }
     this.rerolls++;
     audio.confirm();
@@ -240,6 +242,19 @@ export class FloorUpgrades {
     this.cards.querySelector('button')?.focus();
   }
 
+  /* Mercy, after dying three (or six) times on the same floor. It used to hand
+     out a random buff through a toast; now you choose. main.js owns the buffs
+     and their revert bookkeeping — this only deals the cards and reports the
+     pick. */
+  openMercy(cards, onChoose){
+    this.mode = 'mercy';
+    this.onChoose = onChoose;
+    this.offer = cards;
+    this.renderOffer();
+    this.el.hidden = false;
+    this.cards.querySelector('button')?.focus();
+  }
+
   open(floorIndex, onChoose){
     this.mode = 'floor';
     this.onChoose = onChoose;
@@ -252,15 +267,17 @@ export class FloorUpgrades {
 
   renderOffer(){
     // the wildcard hand is dealt once by openWildcards(); only floor draws reroll
-    if (this.mode !== 'wild') this.offer = this.draw(this.vault ? this.vault.cardCount : 3);
+    if (this.mode === 'floor') this.offer = this.draw(this.vault ? this.vault.cardCount : 3);
     const title = this.el.querySelector('h2');
-    if (title) title.textContent = this.mode === 'wild' ? 'PLAY A WILDCARD' : 'CHOOSE AN UPGRADE';
+    if (title) title.textContent = this.mode === 'wild' ? 'PLAY A WILDCARD'
+      : this.mode === 'mercy' ? 'MERCY · PICK ONE' : 'CHOOSE AN UPGRADE';
     this.el.classList.toggle('wild', this.mode === 'wild');
+    this.el.classList.toggle('mercy', this.mode === 'mercy');
     this.cards.style.setProperty('--cards', this.offer.length);
     this.cards.dataset.cards = this.offer.length;
     if (this.rerollBtn){
       const gems = this.vault ? this.vault.gems : 0;
-      this.rerollBtn.hidden = !this.vault || this.mode === 'wild';
+      this.rerollBtn.hidden = !this.vault || this.mode !== 'floor';
       this.rerollBtn.disabled = gems < this.rerollCost;
       this.rerollBtn.innerHTML = `REROLL <b>◆ ${this.rerollCost}</b> <small>${gems} GEMS</small>`;
     }
@@ -278,6 +295,16 @@ export class FloorUpgrades {
     const upgrade = this.offer.find(u => u.id === id);
     if (!this.paused || !upgrade) return;
     audio.confirm();
+
+    if (this.mode === 'mercy'){
+      this.mode = 'floor';
+      this.el.hidden = true;
+      this.el.classList.remove('mercy');
+      const done = this.onChoose;
+      this.onChoose = null;
+      done?.(upgrade);
+      return;
+    }
 
     if (this.mode === 'wild'){
       const res = upgrade.apply(this.ctx);
@@ -303,7 +330,10 @@ export class FloorUpgrades {
     /* The clock starts armed but does not run until the next floor's fight is
        actually under way. Burning the 30s on the stairs walk and the door
        animation would hand back a buff the player never got to use. */
-    if (revert) this.active.push({ id, name: upgrade.name, t: BOON_SECONDS, revert });
+    /* In the endless pit upgrades are kept for the whole run — a survival run is
+       built by stacking them, and a 30s buff there would just be noise. reset()
+       already restores every stat to base, so nothing needs tracking. */
+    if (revert && !this.permanent) this.active.push({ id, name: upgrade.name, t: BOON_SECONDS, revert });
     this.el.hidden = true;
     const done = this.onChoose;
     this.onChoose = null;
@@ -351,7 +381,7 @@ export class FloorUpgrades {
 
   reset(){
     this.mode = 'floor';
-    this.el.classList.remove('wild');
+    this.el.classList.remove('wild', 'mercy');
     this.clearBoons();
     this.levels = {};
     this.offer = [];

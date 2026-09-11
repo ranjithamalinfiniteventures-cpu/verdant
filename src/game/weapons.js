@@ -285,6 +285,7 @@ export class Weapon {
         }
         if (dead) break;
         if (Math.abs(b.pos.x) > bounds.x + 1 || Math.abs(b.pos.z) > bounds.z + 1) dead = true;
+        if (bounds.r && Math.hypot(b.pos.x, b.pos.z) > bounds.r + 1.2) dead = true;   // the round pit's rim
       }
 
       if (dead){

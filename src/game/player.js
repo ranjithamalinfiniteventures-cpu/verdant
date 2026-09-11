@@ -127,6 +127,17 @@ export class Player {
     // kill residual velocity when we're pinned against a wall
     if (Math.abs(this.pos.x) === bounds.x) this.vel.x = 0;
     if (Math.abs(this.pos.z) === bounds.z) this.vel.z = 0;
+    // a round arena clamps to its circle, and only the outward part of the
+    // velocity is killed — so you slide round the rim instead of sticking to it
+    if (bounds.r){
+      const d = Math.hypot(this.pos.x, this.pos.z);
+      if (d > bounds.r){
+        const nx = this.pos.x / d, nz = this.pos.z / d;
+        this.pos.x = nx * bounds.r; this.pos.z = nz * bounds.r;
+        const out = this.vel.x * nx + this.vel.z * nz;
+        if (out > 0){ this.vel.x -= out * nx; this.vel.z -= out * nz; }
+      }
+    }
 
     // push out of props along whichever axis is the shallower overlap, so the
     // player slides along a crate instead of catching on it

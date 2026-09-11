@@ -381,9 +381,15 @@ export class Enemies {
       e.pos.z += e.vel.z * dt;
 
       if (bounds){
-        const hitWall = e.pos.x <= -bounds.x || e.pos.x >= bounds.x || e.pos.z <= -bounds.z || e.pos.z >= bounds.z;
+        let hitWall = e.pos.x <= -bounds.x || e.pos.x >= bounds.x || e.pos.z <= -bounds.z || e.pos.z >= bounds.z;
         e.pos.x = Math.max(-bounds.x, Math.min(bounds.x, e.pos.x));
         e.pos.z = Math.max(-bounds.z, Math.min(bounds.z, e.pos.z));
+        // round arena: the rim is a circle, and a thornbeast charging into it
+        // has to stop there exactly as it would against a straight wall
+        if (bounds.r){
+          const d = Math.hypot(e.pos.x, e.pos.z), lim = bounds.r - def.radius * 0.5;
+          if (d > lim){ e.pos.x *= lim / d; e.pos.z *= lim / d; hitWall = true; }
+        }
         if (hitWall && e.phase === 'charge'){ e.phase = 'rest'; e.t = 0.85; ctx.shake(0.1); }
       }
       if (colliders && !def.rooted){

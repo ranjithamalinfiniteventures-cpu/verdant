@@ -18,6 +18,9 @@ import { Story }         from './ui/story.js';
 import { FloorUpgrades } from './ui/floor-upgrades.js';
 import { audio }         from './core/audio.js';
 import { Vault }         from './game/vault.js';
+import { buildArena, ARENA_R } from './game/arena.js';
+import { Endless }       from './game/endless.js';
+import { Zones }         from './ui/zones.js';
 
 // Opt-in local playtest loadout. Normal progression is the default.
 const POWER_TEST = ['localhost', '127.0.0.1', '::1', ''].includes(location.hostname)
@@ -32,15 +35,20 @@ let assistedRun = POWER_TEST;
    without trivialising the floor. A mercy-assisted run is flagged so it
    cannot post to the leaderboard. */
 const MERCY_BUFFS = [
-  { id: 'mercy-dmg',   name: 'SUIT RECALIBRATED · +8% DAMAGE',
+  { id: 'mercy-dmg',   name: 'SUIT RECALIBRATED · +8% DAMAGE', icon: 'power',
+    card: 'RECALIBRATE', amount: '+8% DAMAGE', description: 'Every shot hits a little harder.',
     apply: () => weapon.applyRunMods({ damage: 1.08 }) },
-  { id: 'mercy-rate',  name: 'SUIT RECALIBRATED · +8% FIRE RATE',
+  { id: 'mercy-rate',  name: 'SUIT RECALIBRATED · +8% FIRE RATE', icon: 'overclock',
+    card: 'HAIR TRIGGER', amount: '+8% FIRE RATE', description: 'Your gun cycles a little faster.',
     apply: () => weapon.applyRunMods({ fireRate: 1.08 }) },
-  { id: 'mercy-shield', name: 'EMERGENCY PLATING · +1 SHIELD',
+  { id: 'mercy-shield', name: 'EMERGENCY PLATING · +1 SHIELD', icon: 'shield',
+    card: 'EMERGENCY PLATING', amount: '+1 SHIELD', description: 'One hit, soaked completely.',
     apply: () => { player.shield += 1; hud.setShield(player.shield); return null; } },
-  { id: 'mercy-range', name: 'SUIT RECALIBRATED · +50% PICKUP RANGE',
+  { id: 'mercy-range', name: 'SUIT RECALIBRATED · +50% PICKUP RANGE', icon: 'harvest',
+    card: 'LONG REACH', amount: '+50% PICKUP RANGE', description: 'Coins come to you from farther.',
     apply: () => { loot.magnetMul *= 1.5; return 'range'; } },
-  { id: 'mercy-speed', name: 'SUIT RECALIBRATED · +8% SPEED',
+  { id: 'mercy-speed', name: 'SUIT RECALIBRATED · +8% SPEED', icon: 'adrenaline',
+    card: 'LIGHT FEET', amount: '+8% MOVE SPEED', description: 'Easier to slip out of a surround.',
     apply: () => { player.speedMul *= 1.08; return 'speed'; } },
 ];
 let mercyActive = [];   // { buff, revertData } entries for the current floor
@@ -62,18 +70,27 @@ function updateMercyHud(){
   hud.setMercy(next > 0 ? { until: next } : null);
 }
 
+/* Mercy used to roll one buff at random and announce it with a toast. Now it
+   deals three you haven't taken on this floor and lets you pick — being given
+   a choice after a rough patch reads as help, where a random roll read as
+   noise. The card panel pauses the game while it is open. */
 function applyMercy(){
-  // pick a buff that hasn't been used this floor
   const used = new Set(mercyActive.map(m => m.buff.id));
   const pool = MERCY_BUFFS.filter(b => !used.has(b.id));
   if (!pool.length) return;
-  const buff = pool[Math.floor(Math.random() * pool.length)];
-  const revertData = buff.apply();
-  mercyActive.push({ buff, revertData });
-  assistedRun = true;
-  hud.toast(buff.name, 2800);
-  audio.confirm();
-  updateMercyHud();
+  const hand = [];
+  while (hand.length < 3 && pool.length) hand.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]);
+  floorUpgrades.openMercy(
+    hand.map(b => ({ id: b.id, icon: b.icon, name: b.card, amount: b.amount, description: b.description })),
+    (card) => {
+      const buff = MERCY_BUFFS.find(b => b.id === card.id);
+      if (!buff) return;
+      const revertData = buff.apply();
+      mercyActive.push({ buff, revertData });
+      assistedRun = true;
+      hud.toast(buff.name, 2400);
+      updateMercyHud();
+    });
 }
 
 function revertMercy(){
@@ -201,7 +218,8 @@ armory.onProgress = (station,visible,fraction) => {
 };
 
 const state = {
-  phase: 'fight',        // fight | exit | enter | dead | escaped
+  phase: 'fight',        // fight | exit | enter | dead | escaped | over (endless)
+  mode: 'tower',         // tower | endless
   module: 0,
   budget: 0, remaining: 0, spawned: 0, spawnCd: 0,
   cleared: false, upgradeIn: null,
@@ -217,6 +235,16 @@ storeTutorial.onComplete = () => {
 
 /* ------------------------------------------------------------- modules -- */
 function loadModule(i){
+  /* Loading a tower floor IS being in the tower. Undo the pit here, once, so
+     every way back — the zone panel, the overrun screen, a fresh run — lands
+     with the tower's lighting, HUD and 30-second upgrades restored. */
+  if (state.mode !== 'tower'){
+    state.mode = 'tower';
+    lights.mood('tower');
+    hud.setEndlessMode(false);
+    hud.hideEndlessOver();
+    floorUpgrades.permanent = false;
+  }
   // Every retry starts a new encounter, including boss targets and wildcard costs.
   floorUpgrades.clearWildcards();
   boss.onDeath = null;
@@ -273,6 +301,12 @@ function loadModule(i){
 }
 
 function restartRun(){
+  /* A brand-new run starts unassisted. This flag used to be set by mercy (and
+     now by visiting the pit) and never cleared, so one mercy buff quietly
+     disqualified every later run in the same session from the leaderboard. */
+  assistedRun = POWER_TEST;
+  towerResume = null;
+  floorUpgrades.permanent = false;
   floorUpgrades.reset();
   armory.resetRun();
   if (POWER_TEST) applyPowerBuffs();
@@ -309,6 +343,209 @@ function startModule(i){
   // mercy: grant a small buff at 3 and 6 deaths on the same floor
   if (state.floorDeaths === 3 || state.floorDeaths === 6) applyMercy();
   else updateMercyHud();
+}
+
+/* ------------------------------------------------------ the endless pit --
+   A second zone next to the tower: one round arena, waves until you fall.
+   It borrows the whole combat loop (fight() branches on state.mode where the
+   two differ) and swaps the room for buildArena(), the floor budget for the
+   Endless wave director, and the floor header for a wave readout. */
+const endless = new Endless();
+let towerResume = null;          // where the tower run was when you left for the pit
+
+const zones = new Zones({ onPick: (zone) => (zone === 'endless' ? enterEndless() : leaveEndless()) });
+document.getElementById('zones-open').addEventListener('click', e => { e.stopPropagation(); openZones(); });
+
+function openZones(){
+  if (zones.paused || floorUpgrades.paused || armory.paused || story.active) return;
+  if (state.phase !== 'fight' && state.phase !== 'enter') return;   // not mid-death, exit or results
+  const towerFloor = (state.mode === 'tower' ? state.module : (towerResume ? towerResume.module : 0)) + 1;
+  zones.open({ mode: state.mode, towerFloor, best: endless.best });
+}
+
+function enterEndless(){
+  if (state.mode === 'tower') towerResume = { module: state.module, run: { ...state.run }, biomass: state.biomass };
+  state.mode = 'endless';
+  restartEndless();
+}
+
+function restartEndless(){
+  state.mode = 'endless';
+  floorUpgrades.reset();
+  floorUpgrades.permanent = true;          // upgrades stack for the whole pit run
+  armory.resetRun();
+  guide.disarm();
+  hud.setBoon(null);
+  state.floorDeaths = 0;
+  revertMercy();
+  loot.perkMul = 1;
+  state.run = { kills: 0, coins: 0, floors: 0, t: 0, gems: 0, revives: vault.revives };
+  state.overShown = false; state.newBest = false;
+  endless.reset();
+  loadArena();
+  player.group.position.y = 0; player.group.scale.setScalar(1.28); player.group.rotation.y = 0;
+  player.hp = 1; player.invuln = 1.0; player.hitFlash = 0; player.body.visible = true;
+  hud.setHp(1); hud.setDead(false); hud.hideEndlessOver(); hud.hideResults();
+  state.phase = 'enter'; state.phaseT = 0; state.flash = 1; state.hitStop = 0;
+  armory.updateWallet();
+  engine.follow(player.pos, player.vel, 1);
+}
+
+function loadArena(){
+  floorUpgrades.clearWildcards();
+  boss.onDeath = null; boss.despawn();
+  enemies.external.length = 0;
+  state.bossFight = false; state.holdDone = false; state.hold = 0;
+  hud.setBoss(null);
+  room?.dispose();
+  armory.dwell = 0; armory.storeLatched = false;
+  room = buildArena(engine.scene);
+  lights.mood('heartwood');
+  lights.fit(ARENA_R * 2, ARENA_R * 2);
+  // an open pit wants the widest framing the camera allows
+  engine.fitRoom(40, 28, ARENA_R * 2, ARENA_R * 2);
+  enemies.clear(); weapon.clear(); loot.clear(); gems.clear();
+  state.zones = room.zones; state.activeRoom = 0;
+  state.budget = 0; state.remaining = 0; state.spawned = 0; state.spawnCd = 0;
+  state.cleared = false; state.upgradeIn = null;
+  player.pos.copy(room.entryPos);
+  player.vel.set(0, 0, 0);
+  player.facing = Math.PI;                 // facing into the pit
+  player.aim = null;
+  storeTutorial.attach(room, -1);          // clears any floor-1 route; the pit has none
+  engine.camTarget.set(0, 0, Math.max(-engine.clampZ, Math.min(engine.clampZ, player.pos.z)));
+  applyPerks(true);
+  hud.setShield(player.shield);
+  guide.setFloor(room);
+  hud.setEndlessMode(true);
+  updateEndlessHud();
+}
+
+function leaveEndless(){
+  hud.hideEndlessOver();
+  floorUpgrades.permanent = false;
+  floorUpgrades.reset();
+  const resume = towerResume;
+  towerResume = null;
+  if (!resume){ restartRun(); return; }
+  loot.perkMul = 1;
+  startModule(resume.module);              // loadModule flips lighting and HUD back
+  state.run = { ...resume.run, revives: vault.revives };
+  state.biomass = resume.biomass || 0;
+  // a tower run broken up by a trip to the pit is not a ranked run
+  assistedRun = true;
+  hud.toast(`BACK IN THE TOWER · FLOOR ${resume.module + 1}`, 2200);
+  engine.follow(player.pos, player.vel, 1);
+}
+
+function updateEndlessHud(){
+  const breather = endless.phase === 'breather';
+  const total = endless.spec ? endless.spec.count : 0;
+  const left = endless.toSpawn + enemies.alive + (state.bossFight && boss.alive ? 1 : 0);
+  hud.setEndless({ wave: endless.wave, left, total, best: Math.max(endless.best, endless.wave),
+    breather, timer: endless.timer });
+}
+
+function onWaveStart(){
+  const s = endless.spec;
+  room.pulse();
+  room.setDanger(Math.min(1, (s.n - 1) / 20));
+  room.ventsOn = s.n >= 3;                 // the vents wake once you have your feet
+  hud.waveBanner(s);
+  audio.door?.();
+  engine.addShake(s.boss ? 0.45 : 0.2);
+  if (!s.boss) return;
+  // Heartroot rises from the dais, and the heart seed goes dark while it lives
+  boss.spawn(0, 0, s.bossHp, room.rect);
+  enemies.external.push(boss);
+  state.bossFight = true;
+  room.setSeed(false);
+  boss.onDeath = () => {
+    const i = enemies.external.indexOf(boss);
+    if (i >= 0) enemies.external.splice(i, 1);
+    state.bossFight = false;
+    hud.setBoss(null);
+    room.setSeed(true);
+    room.pulse();
+    state.run.gems += 3; vault.earn(3); hud.setCounts({ salvage: state.run.gems });
+    hud.toast('HEARTROOT FALLS · +3 GEMS', 2400);
+    audio.clear();
+  };
+}
+
+function onWaveClear(){
+  const n = endless.cleared;
+  // a little back between waves keeps a run going; the scaling still wins
+  player.heal(0.15); hud.setHp(player.hp);
+  const bonus = 10 + n * 6;
+  state.run.coins += bonus; armory.earn(bonus); hud.collectCoins(bonus);
+  hud.toast(`WAVE ${n} CLEARED · +${bonus} COINS`, 2200);
+  audio.clear();
+  room.pulse();
+  if (endless.upgradeDue) state.upgradeIn = { t: 1.1, unlock: () => {} };
+}
+
+/* The growth crawls out of where the roots stab into the pit — never in your
+   lap, never inside a crystal. Rooted spawners open up in the middle ring. */
+function arenaSpawnPoint(rooted){
+  const td = room.touchdowns;
+  for (let tries = 0; tries < 40; tries++){
+    let x, z;
+    if (rooted){
+      const a = Math.random() * Math.PI * 2, r = 6 + Math.random() * 10;
+      x = Math.cos(a) * r; z = Math.sin(a) * r;
+    } else {
+      const t = td[Math.floor(Math.random() * td.length)];
+      const len = Math.hypot(t.x, t.z), inward = 1.5 + Math.random() * 1.8;
+      x = t.x - (t.x / len) * inward + (Math.random() - 0.5) * 1.8;
+      z = t.z - (t.z / len) * inward + (Math.random() - 0.5) * 1.8;
+    }
+    if (Math.hypot(x - player.pos.x, z - player.pos.z) < (rooted ? 7 : 8)) continue;
+    if (Math.hypot(x, z) > room.bounds.r - 0.6) continue;
+    if (room.colliders.some(c => Math.abs(x - c.x) < c.hw + 0.9 && Math.abs(z - c.z) < c.hd + 0.9)) continue;
+    return [x, z];
+  }
+  return null;
+}
+
+function scaleEndless(e){
+  if (!e || !endless.spec) return e;
+  const hs = endless.spec.hpScale;
+  e.maxHp = Math.max(1, Math.ceil(e.def.hp * (e.def.rooted ? Math.sqrt(hs) : hs)));
+  e.hp = e.maxHp;
+  return e;
+}
+
+function endlessSpawn(n){
+  const s = endless.spec;
+  let made = 0;
+  for (let i = 0; i < n; i++){
+    let key = pickType(s.mix);
+    const pt = arenaSpawnPoint(!!TYPES[key].rooted);
+    if (!pt) continue;
+    let e = enemies.spawn(pt[0], pt[1], key);
+    // a type's pool can run dry at high waves — fall back rather than stall
+    if (!e && key !== 'creeper'){ key = 'creeper'; e = enemies.spawn(pt[0], pt[1], key); }
+    if (!e) continue;
+    scaleEndless(e);
+    made++;
+    const def = TYPES[key];
+    audio.spawn();
+    fx.ring({ x: pt[0], y: 0, z: pt[1] }, { color: def.color, from: 0.2, to: 1.8 + def.radius, life: 0.45 });
+    fx.burst({ x: pt[0], y: 0.4, z: pt[1] }, { count: 8, color: 0xff5db1, speed: 4, size: 0.12, life: 0.5, up: 3 });
+  }
+  endless.spawned(made);
+}
+
+function endlessDeath(){
+  state.phase = 'over'; state.phaseT = 0;
+  state.newBest = endless.saveBest(endless.wave);
+  room.ventsOn = false;
+  audio.dead();
+  audio.duck(0.35, 1.6);
+  hud.setDead(true);
+  engine.addShake(0.45);
+  fx.burst(player.pos, { count: 22, color: 0xff8c42, speed: 7, size: 0.15, life: 0.7, up: 3 });
 }
 
 /* Spawn on the perimeter, never in the player's lap and never inside geometry.
@@ -481,13 +718,22 @@ function clearRoom(){
 /* -------------------------------------------------------------- combat -- */
 function fight(dt){
   const m = MODULES[state.module];
-  if (m.bossArena && !state.bossFight && !state.holdDone){
+  const E = state.mode === 'endless';
+  if (!E && m.bossArena && !state.bossFight && !state.holdDone){
     startBoss();
     return;
   }
 
   // -1 means "in a corridor": a room is only opened by actually walking into it
-  const currentRoom = room.roomAt(player.pos.x, player.pos.z);
+  const currentRoom = E ? 0 : room.roomAt(player.pos.x, player.pos.z);
+  if (E){
+    // the pit: the wave director decides, main.js does the spawning and effects
+    const ev = endless.update(dt, enemies.alive, state.bossFight && boss.alive);
+    if (ev.start) onWaveStart();
+    if (ev.spawn) endlessSpawn(ev.spawn);
+    if (ev.clear) onWaveClear();
+    hud.setThreats(enemies.list.filter(e => e.alive), player.pos);
+  } else {
   if (currentRoom >= 0){
     state.zones[currentRoom].started = true;
     if (currentRoom !== state.activeRoom){
@@ -531,6 +777,7 @@ function fight(dt){
         * (0.82 + Math.random() * 0.3);
     }
   }
+  }   // end tower-only floor/zone spawning
 
   const kills = weapon.update(dt, player, enemies, fx, engine, room.bounds, room.colliders);
   if (kills) state.hitStop = 0.05;
@@ -544,16 +791,20 @@ function fight(dt){
     // once we're basically at the waypoint, drop it and home in directly
     e.route = (d && Math.hypot(e.pos.x - d.x, e.pos.z - d.z) > 1.0) ? d : null;
   }
-  const rawDmg = enemies.update(dt, player, fx, room.colliders, room.bounds, engine, m.maxAlive + 6);
+  const rawDmg = enemies.update(dt, player, fx, room.colliders, room.bounds, engine,
+    (E ? (endless.spec ? endless.spec.maxAlive : 20) : m.maxAlive) + 6);
   // Children created by Bloomers and Seeders inherit the same room/floor tier
   // as normal wave spawns.
   for (const child of enemies.births){
+    if (E){ scaleEndless(child); continue; }
     const childRoom = room.roomAt(child.pos.x, child.pos.z);
     scaleEnemy(child, childRoom >= 0 ? childRoom : Math.max(0, currentRoom));
   }
   // Damage events may come from several enemies at once. Use the strongest
   // currently touching floor tier rather than multiplying the whole swarm twice.
-  let dmg = rawDmg * floorDamageScale(state.module, Math.max(0, currentRoom));
+  let dmg = rawDmg * (E ? (endless.spec ? endless.spec.dmgScale : 1) : floorDamageScale(state.module, Math.max(0, currentRoom)));
+  // the pit's spore vents: they hit you and the growth alike, on a telegraph
+  if (E) dmg = Math.max(dmg, room.updateVents(dt, { player, enemies, fx, engine, audio, wave: endless.wave }));
 
   /* Must run before the damage is applied below, or a beam hit would not land
      until the following frame. */
@@ -577,6 +828,8 @@ function fight(dt){
   // the counter is what is left to kill, so a Bloomer pushing it back up is
   // exactly the feedback the player needs
   const left = state.budget + enemies.alive;
+  if (E) updateEndlessHud();
+  else {
   if (left !== state.remaining){
     state.remaining = left;
     hud.setModule(state.module, m.name, left);
@@ -597,6 +850,7 @@ function fight(dt){
     hud.setModule(state.module, m.name, Math.ceil(state.hold));
     if (state.hold <= 0){ state.hold = 0; state.holdDone = true; clearRoom(); }
   } else if (left === 0 && !state.cleared) clearRoom();
+  }   // end tower-only floor counter
 
   // ...and wait for the pickups to finish flying in before taking the screen
   if (state.upgradeIn){
@@ -641,6 +895,8 @@ function fight(dt){
           const dx = e.pos.x - player.pos.x, dz = e.pos.z - player.pos.z, dd = Math.hypot(dx, dz) || 1;
           if (dd < 6){ e.vel.x += dx / dd * 14; e.vel.z += dz / dd * 14; }
         }
+      } else if (player.hp <= 0 && E){
+        endlessDeath();
       } else if (player.hp <= 0){
         state.phase = 'dead'; state.phaseT = 0;
         state.floorDeaths++;
@@ -654,11 +910,12 @@ function fight(dt){
     }
   }
 
-  const got = loot.update(dt, player, state.cleared, room.bounds);
+  const sweep = state.cleared || (E && endless.phase === 'breather');
+  const got = loot.update(dt, player, sweep, room.bounds);
   if (got){ state.biomass += got; const coins = Math.round(got * 5 * loot.valueMul);
     state.run.coins += coins; armory.earn(coins); hud.collectCoins(coins);
     fx.burst({x:player.pos.x, y:0.65, z:player.pos.z}, {count:4, color:0xf5c518, speed:2, size:0.065, life:0.22, up:0.8}); }
-  const gotGems = gems.update(dt, player, state.cleared, room.bounds);
+  const gotGems = gems.update(dt, player, sweep, room.bounds);
   if (gotGems){
     state.run.gems += gotGems; vault.earn(gotGems); hud.setCounts({ salvage: state.run.gems });
     hud.toast(`+${gotGems} GEM · SEED VAULT`, 1100);
@@ -718,8 +975,25 @@ function transition(dt, dir){
     player.group.position.copy(player.pos);
     if(state.phaseT>=ENTER_T){
       state.phase='fight';
+      if (state.mode === 'endless'){
+        hud.toast('HEARTWOOD PIT · SURVIVE', 1900);
+        return;
+      }
       state.spawnCd = storeTutorial.active && state.module === 0 ? 999 : .7;
       hud.toast(storeTutorial.active && state.module === 0 ? 'FOLLOW THE CYAN PATH TO THE ARMORY' : `FLOOR ${state.module+1} · ${MODULES[state.module].name}`, 1900);
+    }
+    return;
+  }
+
+  // the pit: SIGNAL LOST for a beat, then the overrun screen
+  if (state.phase === 'over'){
+    if (state.phaseT > 1.5 && !state.overShown){
+      state.overShown = true;
+      hud.setDead(false);
+      hud.showEndlessOver({
+        wave: endless.wave, best: endless.best, newBest: state.newBest,
+        kills: state.run.kills, seconds: state.run.t, coins: state.run.coins, gems: state.run.gems,
+      }, () => restartEndless(), () => leaveEndless());
     }
     return;
   }
@@ -782,6 +1056,13 @@ if (DEV_HOST){
     : Number.isFinite(floorParam) && floorParam >= 1 ? Math.min(floorParam, MODULES.length) - 1
     : -1;
 
+  // ?endless — straight into the Heartwood Pit
+  if (q.has('endless')){
+    story.finish?.();
+    revealGame();
+    enterEndless();
+  }
+
   if (jumpTo >= 0){
     assistedRun = true;
     story.finish?.();
@@ -834,7 +1115,7 @@ function tick(raw, render = true){
     if (render) engine.render(t, 0);
     return;
   }
-  if (floorUpgrades.paused){
+  if (floorUpgrades.paused || zones.paused){
     if (render) engine.render(t, 0);
     return;
   }
@@ -869,8 +1150,10 @@ function tick(raw, render = true){
   }
 
   fx.update(dt);
+  if (state.mode === 'endless') room.animate(t, dt);   // floor ripples, veins, vents, spores
   const m = MODULES[state.module];
-  audio.setIntensity(state.phase === 'fight' ? enemies.alive / Math.max(m.maxAlive, 1) : 0);
+  const cap = state.mode === 'endless' ? (endless.spec ? endless.spec.maxAlive : 20) : m.maxAlive;
+  audio.setIntensity(state.phase === 'fight' ? enemies.alive / Math.max(cap, 1) : 0);
   audio.update();
   hud.setFlash(state.flash);
   hud.perf(raw, engine);
@@ -883,6 +1166,7 @@ function tick(raw, render = true){
 addEventListener('keydown', e => {
   if (e.code === 'KeyB' && !e.repeat){ armory.paused ? armory.close() : armory.hintStore(); }
   if (e.code === 'KeyM') hud.setMuted(!audio.toggle());
+  if (e.code === 'KeyZ' && !e.repeat){ zones.paused ? zones.close() : openZones(); }
   if (e.code === 'KeyP') hud.togglePerf();
   if (e.code === 'BracketRight') engine.setQuality(Math.min(3, engine.quality + 1));
   if (e.code === 'BracketLeft')  engine.setQuality(Math.max(0, engine.quality - 1));
@@ -896,6 +1180,7 @@ requestAnimationFrame(() => requestAnimationFrame(() => {
 window.VERDANT = {
   engine, input, player, enemies, weapon, loot, gems, vault, fx, guide, boss, hud, state, tick, audio, armory, story, storeTutorial, floorUpgrades,
   MODULES, startModule, restartRun, THREE,
+  endless, zones, enterEndless, leaveEndless, restartEndless,
   get frames(){ return frames; },
   get room(){ return room; }
 };

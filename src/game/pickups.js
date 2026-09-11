@@ -81,6 +81,11 @@ export class Pickups {
         if (bounds){
           p.x = Math.max(-bounds.x, Math.min(bounds.x, p.x));
           p.z = Math.max(-bounds.z, Math.min(bounds.z, p.z));
+          // in the round pit a coin must not come to rest out behind the rim
+          if (bounds.r){
+            const d = Math.hypot(p.x, p.z);
+            if (d > bounds.r){ p.x *= bounds.r / d; p.z *= bounds.r / d; }
+          }
         }
       }
       this._e.set(p.t * 0.7, p.t, 0);

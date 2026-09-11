@@ -333,6 +333,14 @@ export class Boss {
     const a = this.arena;
     if (!a) return BEAM_LEN;
     const sx = Math.sin(angle), sz = Math.cos(angle);
+    /* A round arena (the endless pit): intersect the ray with the circle. From
+       the boss at p, solve |p + t·d| = r for the positive root. */
+    if (a.r){
+      const px = this.pos.x, pz = this.pos.z;
+      const b = px * sx + pz * sz, c = px * px + pz * pz - a.r * a.r;
+      const disc = b * b - c;
+      return clamp(disc > 0 ? -b + Math.sqrt(disc) : a.r, 2.2, BEAM_LEN);
+    }
     let t = BEAM_LEN;
     if (Math.abs(sx) > EPS){
       const tx = ((sx > 0 ? a.x1 : a.x0) - this.pos.x) / sx;

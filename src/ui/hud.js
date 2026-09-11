@@ -187,6 +187,68 @@ export class Hud {
       : `${info.until} MORE DEATH${info.until === 1 ? '' : 'S'} HERE → FREE BONUS`;
   }
 
+  /* ------------------------------------------------ the endless pit -- */
+
+  /** Switch the HUD between the tower and the pit. */
+  setEndlessMode(on){
+    this.el.hud.classList.toggle('endless', !!on);
+    this._endlessKey = null;
+  }
+
+  /** The wave readout that stands in for the floor header in the pit. */
+  setEndless({ wave, left, total, best, breather, timer }){
+    const label = breather
+      ? (wave ? `WAVE ${wave} CLEARED · NEXT IN ${Math.max(1, Math.ceil(timer))}` : `FIRST WAVE IN ${Math.max(1, Math.ceil(timer))}`)
+      : `HEARTWOOD PIT · WAVE ${wave}`;
+    const rem = breather ? `BEST WAVE&nbsp;&nbsp;${best}` : `GROWTH LEFT&nbsp;&nbsp;${left}&nbsp;&nbsp;·&nbsp;&nbsp;BEST&nbsp;&nbsp;${best}`;
+    const key = label + '|' + rem;
+    if (key !== this._endlessKey){
+      this._endlessKey = key;
+      this.el.xpLabel.textContent = label;
+      this.el.rem.innerHTML = rem;
+    }
+    this.setProgress(breather ? 1 : total ? Math.max(0, Math.min(1, 1 - left / total)) : 0);
+  }
+
+  /** The big centred call-out when a wave starts. */
+  waveBanner(spec){
+    const el = document.getElementById('wave-banner');
+    if (!el) return;
+    const NAMES = { sporeling: 'SPORELINGS', stalker: 'STALKERS', seeder: 'SEEDERS', thornbeast: 'THORNBEASTS', bloomer: 'BLOOMERS' };
+    el.classList.toggle('boss', !!spec.boss);
+    document.getElementById('wb-eyebrow').textContent = spec.boss ? 'THE PIT STIRS' : spec.surge ? 'SURGE' : 'INCOMING';
+    document.getElementById('wb-title').textContent = `WAVE ${spec.n}`;
+    document.getElementById('wb-sub').textContent = spec.boss ? 'HEARTROOT RISES'
+      : spec.surge ? 'ELITES INBOUND'
+      : spec.debut && NAMES[spec.debut] ? `${NAMES[spec.debut]} JOIN THE PIT` : '';
+    el.hidden = false;
+    requestAnimationFrame(() => el.classList.add('on'));
+    clearTimeout(this._wbT);
+    this._wbT = setTimeout(() => {
+      el.classList.remove('on');
+      setTimeout(() => { if (!el.classList.contains('on')) el.hidden = true; }, 420);
+    }, 2300);
+  }
+
+  showEndlessOver(stats, onAgain, onTower){
+    const $$ = id => document.getElementById(id);
+    $$('eo-wave').textContent = stats.wave;
+    const best = $$('eo-best');
+    best.textContent = stats.newBest ? `NEW BEST · WAVE ${stats.best}` : `BEST WAVE ${stats.best}`;
+    best.classList.toggle('new', !!stats.newBest);
+    $$('eo-kills').textContent = stats.kills;
+    const m = Math.floor(stats.seconds / 60), sec = Math.floor(stats.seconds % 60);
+    $$('eo-time').textContent = `${m}:${String(sec).padStart(2, '0')}`;
+    $$('eo-coins').textContent = stats.coins;
+    $$('eo-gems').textContent = stats.gems;
+    $$('eo-again').onclick = () => { this.hideEndlessOver(); onAgain(); };
+    $$('eo-tower').onclick = () => { this.hideEndlessOver(); onTower(); };
+    $$('endless-over').classList.add('on');
+    setTimeout(() => $$('eo-again').focus(), 60);
+  }
+
+  hideEndlessOver(){ document.getElementById('endless-over')?.classList.remove('on'); }
+
   /** Second Wind charges left this run; the row hides when the perk isn't owned. */
   setRevives(n){
     const row = document.getElementById('revive-row');

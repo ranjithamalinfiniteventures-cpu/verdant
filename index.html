@@ -69,6 +69,13 @@
 })();
 </script>
 <style>
+/* The `hidden` attribute has to win. The browser's own [hidden]{display:none}
+   loses to ANY author rule that sets display — so #boon and #mercy, which set
+   display:flex, stayed on screen as empty pills even while hidden, sitting on
+   top of the floor header. Several elements below already patch this one at
+   a time (#floor-upgrade[hidden], #store-tutorial[hidden], ...); this makes it
+   impossible to reintroduce. */
+[hidden]{display:none!important}
 :root{
   --gold:#f5c518; --gem:#4ade80; --orange:#ff8c42; --red:#e03535; --cyan:#38bdf8;
   --tile:#1c2635; --tile-b:#2c3a4d; --ink:#0b0f14;
@@ -85,7 +92,7 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
 #hud{position:absolute;inset:0;pointer-events:none;opacity:0;transition:opacity .6s .2s}
 #hud.on{opacity:1}
 .h{position:absolute;pointer-events:auto}
-.tl{top:calc(var(--u)*1.5);left:calc(var(--u)*1.5);display:flex;flex-direction:column;gap:calc(var(--u)*.7)}
+.tl{top:calc(var(--u)*1.5);left:calc(var(--u)*1.5);display:flex;flex-direction:row;gap:calc(var(--u)*.6)}
 .tc{top:calc(var(--u)*1.1);left:50%;transform:translateX(-50%);text-align:center}
 .tr{top:calc(var(--u)*1.5);right:calc(var(--u)*1.5)}
 .rc{top:calc(var(--u)*5.6);right:calc(var(--u)*1.5)}
@@ -189,7 +196,11 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
 #toast{position:absolute;left:50%;top:26%;transform:translate(-50%,-14px);opacity:0;
   font-size:calc(var(--u)*1.9);font-weight:800;letter-spacing:.28em;color:#fff;
   text-shadow:0 0 calc(var(--u)*2) rgba(74,222,128,.9),0 calc(var(--u)*.2) calc(var(--u)*.6) rgba(0,0,0,.8);
-  transition:opacity .3s,transform .3s;pointer-events:none;white-space:nowrap}
+  transition:opacity .3s,transform .3s;pointer-events:none;
+  white-space:normal;text-align:center;width:max-content;max-width:min(92vw,900px);line-height:1.35}
+/* the boss bar sits at a fixed 150px; on a short screen 26% lands on top of it */
+#bossbar:not([hidden]) ~ #toast{top:max(26%,198px)}
+#bossbar:not([hidden]) ~ #wave-banner{top:max(34%,214px)}
 #toast.on{opacity:1;transform:translate(-50%,0)}
 
 #results{position:absolute;inset:0;display:grid;place-items:center;z-index:16;
@@ -437,7 +448,10 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
   #mercy{top:344px}
   #boon:not([hidden]) ~ #mercy{top:390px}
   #bossbar:not([hidden]) ~ #mercy{top:436px}
-  #store-tutorial{top:345px}            /* was 18% of viewport height, landing on the header; also kept clear of the minimap directly above it */
+  #store-tutorial{top:345px}
+  /* no keyboard on a phone, and the centred hint ran under the weapon button */
+  .hint{left:14px;transform:none;text-align:left}
+  .hint .kb{display:none}            /* was 18% of viewport height, landing on the header; also kept clear of the minimap directly above it */
 }
 
 
@@ -456,6 +470,82 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
 #boon.low i{background:#ff6b6b;box-shadow:0 0 9px #ff6b6b;animation-duration:.42s}
 #boon.low b{color:#ff9b9b}
 @keyframes boonPulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.45;transform:scale(.78)}}
+
+/* ---------------------------------------------------------------- zones --
+   Everything below lives inside #hud, which is pointer-events:none — so every
+   interactive panel says pointer-events:auto explicitly. (The upgrade panel
+   once shipped unclickable for exactly this reason.) */
+.tile.zones-open{cursor:pointer;color:#ff6fc4;padding:0;border:1px solid var(--tile-b)}
+.tile.zones-open svg{width:60%;height:60%}
+#hud.endless .tile.zones-open{color:#7ef0d8}
+
+#zones{position:absolute;inset:0;z-index:19;display:grid;place-items:center;padding:20px;overflow-y:auto;
+  pointer-events:auto;background:radial-gradient(ellipse at 50% 40%,rgba(46,8,38,.82),rgba(3,5,9,.96))}
+#zones[hidden]{display:none}
+.zones-panel{width:min(760px,94vw)}
+.zones-panel header{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+.zones-panel h2{margin:0;font:800 clamp(22px,3.4vw,38px)/1 var(--f);letter-spacing:.14em;color:#fff}
+#zones-close{width:44px;height:44px;border-radius:50%;border:1px solid #3b5962;background:#0e1a22;color:#fff;
+  font:700 24px/1 var(--f);cursor:pointer;flex:none}
+.zone-cards{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.zone-card{position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:6px;text-align:left;
+  padding:18px;min-height:260px;border-radius:16px;cursor:pointer;color:#fff;font-family:var(--f);overflow:hidden;
+  border:2px solid transparent;transition:transform .15s,border-color .15s,box-shadow .15s}
+.zone-card:hover,.zone-card:focus-visible{transform:translateY(-3px);outline:none}
+.zone-card.tower{background:linear-gradient(160deg,#12303a,#0a161d);border-color:#2f6b74}
+.zone-card.pit{background:linear-gradient(160deg,#3d0f36,#12060f);border-color:#8a2a6e}
+.zone-card.pit:hover,.zone-card.pit:focus-visible{border-color:#ff3fa8;box-shadow:0 0 30px rgba(255,63,168,.35)}
+.zone-card.tower:hover,.zone-card.tower:focus-visible{border-color:#7ef0d8;box-shadow:0 0 30px rgba(126,240,216,.25)}
+.zc-art{align-self:stretch;height:118px;display:grid;place-items:center;margin-bottom:4px}
+.zc-art svg{height:100%;width:auto}
+.zone-card strong{font-size:20px;letter-spacing:.12em;font-weight:800}
+.zone-card em{font-style:normal;font-size:11px;letter-spacing:.14em;color:rgba(255,255,255,.62);font-weight:700}
+.zone-card small{margin-top:auto;font-size:12px;letter-spacing:.16em;font-weight:800;padding:6px 11px;
+  border-radius:999px;background:rgba(255,255,255,.08)}
+.zone-card.tower small{color:#7ef0d8}.zone-card.pit small{color:#ff8ed0}
+.zones-note{margin:14px 2px 0;font-size:11px;letter-spacing:.06em;line-height:1.5;color:rgba(255,255,255,.45);text-align:center}
+@media(max-width:560px){.zone-cards{grid-template-columns:1fr;gap:12px}.zone-card{min-height:0;padding:14px}
+  .zc-art{height:70px}.zone-card strong{font-size:17px}}
+
+/* the pit's HUD: the tower header becomes a wave readout */
+#hud.endless .pips,#hud.endless .floor-rooms,#hud.endless #minimap,#hud.endless #store-tutorial{display:none}
+#hud.endless .xp{border-color:rgba(255,63,168,.55)}
+#hud.endless .xp i{background:linear-gradient(180deg,#ff8ed0,#ff2f9a);box-shadow:0 0 calc(var(--u)*1.2) rgba(255,47,154,.65)}
+
+#wave-banner{position:absolute;left:50%;top:34%;transform:translate(-50%,8px);text-align:center;
+  pointer-events:none;z-index:7;opacity:0;transition:opacity .35s,transform .35s}
+#wave-banner.on{opacity:1;transform:translate(-50%,0)}
+#wave-banner[hidden]{display:none}
+#wave-banner small{display:block;font:800 12px var(--f);letter-spacing:.4em;color:#ff8ed0}
+#wave-banner b{display:block;font:800 clamp(44px,8vw,86px)/1.05 var(--f);letter-spacing:.08em;color:#fff;
+  text-shadow:0 0 30px rgba(255,47,154,.65),0 4px 0 rgba(0,0,0,.45)}
+#wave-banner span{display:block;margin-top:6px;font:800 13px var(--f);letter-spacing:.3em;color:#ffd08a}
+#wave-banner.boss b{color:#ffd9ef;text-shadow:0 0 44px rgba(255,47,154,.95),0 4px 0 rgba(0,0,0,.45)}
+#wave-banner.boss span{color:#ff6b9d}
+
+#endless-over{position:absolute;inset:0;display:grid;place-items:center;z-index:17;padding:16px;overflow-y:auto;
+  background:radial-gradient(ellipse at 50% 45%,rgba(62,8,42,.78),rgba(3,5,9,.95));
+  opacity:0;pointer-events:none;transition:opacity .5s}
+#endless-over.on{opacity:1;pointer-events:auto}
+#endless-over .card{text-align:center;padding:calc(var(--u)*2.4) calc(var(--u)*3.2);width:min(460px,92vw);box-sizing:border-box;
+  background:linear-gradient(180deg,rgba(40,14,36,.94),rgba(14,6,14,.95));border:1px solid #6d2358;
+  border-radius:calc(var(--u)*1.2);box-shadow:0 calc(var(--u)*1.2) calc(var(--u)*3) rgba(0,0,0,.6)}
+.eo-eyebrow{font:800 11px var(--f);letter-spacing:.4em;color:#ff8ed0}
+#endless-over h2{font:800 calc(var(--u)*3.2)/1 var(--f);letter-spacing:.3em;margin:8px 0 0;color:#ff6b9d;
+  text-shadow:0 0 calc(var(--u)*2.4) rgba(255,47,154,.5)}
+.eo-wave{margin:16px 0 4px}
+.eo-wave span{display:block;font:800 11px var(--f);letter-spacing:.34em;color:rgba(255,255,255,.5)}
+.eo-wave b{display:block;font:800 calc(var(--u)*6.2)/1 var(--f);color:#fff}
+.eo-best{font:800 12px var(--f);letter-spacing:.24em;color:#ffd08a;margin-bottom:18px}
+.eo-best.new{color:#7ef0d8;text-shadow:0 0 16px rgba(126,240,216,.6)}
+#endless-over .stats{display:grid;grid-template-columns:1fr 1fr;gap:calc(var(--u)*1.2) calc(var(--u)*2.4)}
+#endless-over .stats b{display:block;font-size:calc(var(--u)*2);font-weight:800;color:#fff}
+#endless-over .stats span{font-size:calc(var(--u)*.66);letter-spacing:.2em;color:rgba(255,255,255,.42)}
+.eo-actions{display:flex;gap:10px;justify-content:center;margin-top:22px;flex-wrap:wrap}
+.eo-actions button{font:800 13px var(--f);letter-spacing:.16em;padding:14px 20px;border-radius:12px;border:0;
+  background:#ff2f9a;color:#fff;cursor:pointer;box-shadow:0 4px 0 #8e1456}
+.eo-actions button:active{transform:translateY(2px);box-shadow:0 2px 0 #8e1456}
+.eo-actions button.ghost{background:transparent;border:1px solid #3b5962;color:#bdece7;box-shadow:none}
 
 /* mercy: this used to only announce itself through a toast that got stomped
    0.75s later by the ordinary floor-name toast, so nobody ever saw it fire.
@@ -495,6 +585,8 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
 #boon.wild i{background:#ff2f9a;box-shadow:0 0 10px #ff2f9a}
 #floor-upgrade.wild .floor-upgrade-card{background:linear-gradient(180deg,#ff59a8,#e0327f)}
 #floor-upgrade.wild .floor-upgrade-card.is-wild{background:linear-gradient(180deg,#8b5cf6,#6d28d9)}
+/* mercy: green like its HUD badge — help, not a reward */
+#floor-upgrade.mercy .floor-upgrade-card{background:linear-gradient(180deg,#34d399,#059669)}
 #floor-upgrade.wild .floor-upgrade-card em{font-size:19px}
 .upgrade-cost{display:block;margin-top:10px;padding-top:9px;
   border-top:1px solid rgba(255,255,255,.28);
@@ -516,6 +608,11 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
     <div class="h tl">
       <button class="tile story-replay" id="story-replay" aria-label="Replay story" title="Replay story">STORY</button>
       <button class="tile snd" id="snd" aria-label="Mute sound" aria-pressed="true" style="font:inherit;color:inherit;padding:0">♪</button>
+      <button class="tile zones-open" id="zones-open" aria-label="Choose a zone" title="Zones (Z)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="9" stroke-dasharray="3.2 2.4"/><circle cx="12" cy="12" r="5.2"/>
+          <circle cx="12" cy="12" r="1.8" fill="currentColor" stroke="none"/></svg>
+      </button>
     </div>
 
     <div class="h tc">
@@ -578,6 +675,53 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
       <button id="rs-again">RUN AGAIN</button>
     </div></div>
     <div id="dead"><b>SIGNAL LOST</b><small>REBOOTING SUIT</small></div>
+    <div id="wave-banner" hidden><small id="wb-eyebrow">INCOMING</small><b id="wb-title">WAVE 1</b><span id="wb-sub"></span></div>
+    <div id="endless-over"><div class="card">
+      <small class="eo-eyebrow">HEARTWOOD PIT</small>
+      <h2>OVERRUN</h2>
+      <div class="eo-wave"><span>YOU FELL ON WAVE</span><b id="eo-wave">0</b></div>
+      <div class="eo-best" id="eo-best">BEST WAVE 0</div>
+      <div class="stats">
+        <div><b id="eo-kills">0</b><span>GROWTH KILLED</span></div>
+        <div><b id="eo-time">0:00</b><span>SURVIVED</span></div>
+        <div><b id="eo-coins">0</b><span>COINS EARNED</span></div>
+        <div><b id="eo-gems" style="color:#4ade80">0</b><span>GEMS BANKED</span></div>
+      </div>
+      <div class="eo-actions"><button id="eo-again">FIGHT AGAIN</button><button id="eo-tower" class="ghost">BACK TO THE TOWER</button></div>
+    </div></div>
+    <section id="zones" hidden aria-label="Choose a zone">
+      <div class="zones-panel">
+        <header><h2>CHOOSE A ZONE</h2><button id="zones-close" aria-label="Close zones">×</button></header>
+        <div class="zone-cards">
+          <button class="zone-card tower" data-zone="tower">
+            <span class="zc-art"><svg viewBox="0 0 120 110" aria-hidden="true">
+              <rect x="44" y="10" width="32" height="92" rx="3" fill="#1c4450" stroke="#7ef0d8" stroke-width="2"/>
+              <g fill="#7ef0d8" opacity=".85"><rect x="50" y="18" width="8" height="5"/><rect x="62" y="18" width="8" height="5"/>
+              <rect x="50" y="32" width="8" height="5"/><rect x="62" y="32" width="8" height="5"/><rect x="50" y="46" width="8" height="5"/>
+              <rect x="62" y="46" width="8" height="5"/><rect x="50" y="60" width="8" height="5"/><rect x="62" y="60" width="8" height="5"/>
+              <rect x="50" y="74" width="8" height="5"/><rect x="62" y="74" width="8" height="5"/></g>
+              <path d="M34 102h52" stroke="#7ef0d8" stroke-width="2"/><path d="M60 2v8" stroke="#ff8ed0" stroke-width="3"/>
+              <path d="M40 104c-6-14 2-24-4-40M80 104c6-12-2-26 5-38" stroke="#4ade80" stroke-width="2.5" fill="none"/></svg></span>
+            <strong>THE TOWER</strong>
+            <em>20 FLOORS · CLIMB OUT OF THE STATION</em>
+            <small id="zc-tower-state">YOU ARE HERE</small>
+          </button>
+          <button class="zone-card pit" data-zone="endless">
+            <span class="zc-art"><svg viewBox="0 0 120 110" aria-hidden="true">
+              <ellipse cx="60" cy="66" rx="52" ry="30" fill="#2a0b24" stroke="#ff3fa8" stroke-width="2"/>
+              <ellipse cx="60" cy="66" rx="36" ry="20" fill="none" stroke="#ff8ed0" stroke-width="1.5" opacity=".7"/>
+              <ellipse cx="60" cy="66" rx="19" ry="10" fill="none" stroke="#2ee6cf" stroke-width="2"/>
+              <path d="M60 36v60M8 66h104M24 45l72 42M24 87l72-42" stroke="#ff3fa8" stroke-width="1" opacity=".45"/>
+              <path d="M10 40c10-26 30-30 36-10M110 40c-10-26-30-30-36-10M18 30c-4 18 8 26 12 30" stroke="#b02e7c" stroke-width="5" fill="none" stroke-linecap="round"/>
+              <path d="M60 20l6 10-6 10-6-10z" fill="#ffd1ea"/></svg></span>
+            <strong>HEARTWOOD PIT</strong>
+            <em>ENDLESS · ONE ARENA · NO WAY OUT</em>
+            <small id="zc-pit-state">BEST WAVE —</small>
+          </button>
+        </div>
+        <p class="zones-note" id="zones-note">Leaving the tower keeps your floor. A tower run that visits the pit is not ranked.</p>
+      </div>
+    </section>
     <section id="floor-upgrade" hidden aria-label="Choose a weapon upgrade">
       <div class="floor-upgrade-panel">
         <h2>CHOOSE AN UPGRADE</h2>
@@ -587,7 +731,7 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
     </section>
     <div id="php"><i id="phpfill"></i><u id="phpshield"></u></div>
     <div id="stick"><i></i></div>
-    <div class="hint" id="hint">WASD / ARROWS &nbsp;·&nbsp; DRAG TO MOVE</div>
+    <div class="hint" id="hint"><span class="kb">WASD / ARROWS &nbsp;·&nbsp; </span>DRAG TO MOVE</div>
   </div>
 
   <dialog id="armory" aria-labelledby="armory-title">
