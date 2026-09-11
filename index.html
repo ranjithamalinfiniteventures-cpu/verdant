@@ -341,9 +341,9 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
 .gun-info{padding:16px 16px 0}.gun-card h3{font-size:17px;letter-spacing:.04em;margin:9px 0;color:var(--gun)}.gun-card p{min-height:36px;margin:8px 0 14px}
 .gun-actions{margin-top:auto;display:flex;flex-wrap:wrap;gap:7px;padding:16px}.gun-actions button{flex:1}.gun-actions button[data-action="buy"],.gun-actions button[data-action="upgrade"]{background:#cde9df!important;color:#142d2d!important;border-color:transparent!important}
 @media(max-width:760px){#gun-list{grid-template-columns:repeat(2,minmax(0,1fr))}#armory{padding:16px}#armory h2{font-size:26px}}
-@media(max-width:460px){#gun-list{grid-template-columns:1fr}.weapon-art svg{height:130px}.tc{top:68px}#store-hint{bottom:115px;left:12px;max-width:80vw;font-size:10px}}
+@media(max-width:460px){#gun-list{grid-template-columns:1fr}.weapon-art svg{height:130px}#armory .tc{top:68px}#store-hint{bottom:115px;left:12px;max-width:80vw;font-size:10px}}
 .enemy-hp{position:absolute;left:0;top:0;width:34px;height:5px;background:#160e1ee6;border:1px solid #080b12;border-radius:3px;overflow:hidden;pointer-events:none}.enemy-hp i{display:block;height:100%;background:linear-gradient(#ffa8cb,#e44b81);transform-origin:left;transition:transform .1s linear}
-@media(max-width:560px){#armory{padding:16px}#armory h2{font-size:21px}.gun-card{grid-template-columns:60px 1fr;padding:10px}.gun-preview{transform:scale(.8);transform-origin:left}.tc{top:68px}.gun-actions{grid-column:1/-1}}
+@media(max-width:560px){#armory{padding:16px}#armory h2{font-size:21px}.gun-card{grid-template-columns:60px 1fr;padding:10px}.gun-preview{transform:scale(.8);transform-origin:left}#armory .tc{top:68px}.gun-actions{grid-column:1/-1}}
 .pill{position:relative}.coin-pop{position:absolute;right:0;top:calc(100% + 9px);white-space:nowrap;font-size:12px;font-weight:800;color:#ffe18a;text-shadow:0 2px 6px #000;pointer-events:none;opacity:0}
 
 /* Workshop presentation: the live scene stays visible above a bottom weapon tray. */
@@ -418,6 +418,28 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
 #story-skip{font:700 10px var(--f);letter-spacing:.16em;color:#aaa;background:transparent;border:0;padding:12px;cursor:pointer}
 @keyframes story-pulse{50%{opacity:.45}}
 @media(max-width:720px){#story{grid-template-columns:1fr;grid-template-rows:1fr}#story .story-copy{order:0;padding:28px}.story-copy::before{display:block}}
+
+/* Mobile HUD stacking.
+
+   The top-left (STORY/sound), top-right (coins/gems) and right (salvage/
+   medkit) clusters keep their desktop math (--u based), but on a narrow phone
+   the floor header below them has to wrap its room list onto 2-4 lines
+   instead of one, growing to ~168px measured on a 4-room floor with long
+   names. Nothing below it — the minimap, the boon/boss/mercy badges, the
+   floor-1 tutorial box — ever accounted for that, so on a real phone all of
+   it landed stacked on top of the header text at once. This pushes each of
+   them down in sequence instead of leaving them at desktop offsets. */
+@media(max-width:480px){
+  #hud .h.tc{top:132px}                 /* clears the tl/tr/rc corner clusters above it */
+  #minimap{top:236px;left:10px}         /* clears the header's worst-case 4-room height */
+  #boon{top:344px}
+  #bossbar{top:390px}
+  #mercy{top:344px}
+  #boon:not([hidden]) ~ #mercy{top:390px}
+  #bossbar:not([hidden]) ~ #mercy{top:436px}
+  #store-tutorial{top:345px}            /* was 18% of viewport height, landing on the header; also kept clear of the minimap directly above it */
+}
+
 
 /* live floor-upgrade timer — a buff you can lose has to be visible losing it */
 #boon{position:absolute;left:50%;top:104px;transform:translateX(-50%);

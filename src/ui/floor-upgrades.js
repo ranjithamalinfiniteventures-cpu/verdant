@@ -269,7 +269,7 @@ export class FloorUpgrades {
         <span class="upgrade-icon">${ICONS[u.icon || u.id]}</span>
         <strong>${u.name}</strong>
         <em>${u.amount}</em>
-        <small>${u.description || u.cost}</small>
+        ${u.description ? `<small>${u.description}</small>` : ''}
         ${u.cost && !u.wild ? `<span class="upgrade-cost">${u.cost}</span>` : ''}
       </button>`).join('');
   }

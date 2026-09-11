@@ -188,7 +188,14 @@ armory.onProgress = (station,visible,fraction) => {
   const el=document.getElementById('store-progress'); el.hidden=!visible;
   storeAnchor.set(station.x,2.25,station.z);
   engine.camera.updateMatrixWorld(); engine.project(storeAnchor,storeScreen);
-  el.style.left=storeScreen.x+'px';el.style.top=storeScreen.y+'px';
+  /* Clamp above the floor header, not just wherever the pad happens to project
+     to. This is a world-tracked ring — its screen position depends on camera
+     framing, which varies by room size and aspect ratio — so on a phone,
+     where the header can run to ~170px tall wrapping a 4-room list, the ring
+     was landing right on top of the header text with nothing to stop it. */
+  const headerBottom = document.querySelector('.h.tc')?.getBoundingClientRect().bottom || 0;
+  el.style.left=storeScreen.x+'px';
+  el.style.top=Math.max(storeScreen.y, headerBottom + 24)+'px';
   el.style.setProperty('--progress',`${fraction*360}deg`);
   el.firstElementChild.textContent=fraction ? `${(2-fraction*2).toFixed(1)}s` : '2s';
 };
