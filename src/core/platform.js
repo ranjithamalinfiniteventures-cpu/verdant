@@ -25,49 +25,97 @@
 
 const sdk = () => globalThis.CrazyGames?.SDK || null;
 
-/* The SDK script is loaded async, so it may not be there yet on the first
-   frame. Nothing here waits on it: calls made before it arrives are dropped,
-   which is correct for events and harmless for the rest. */
-let ready = false;
-export const platform = {
-  get available(){ return !!sdk(); },
-  get environment(){ return sdk()?.environment || 'local'; },   // 'crazygames' | 'local' | 'disabled'
+let ready = false, environment = 'disabled', initializing, loadingStarted = false;
+function deadline(promise, ms){
+  let timer;
+  return Promise.race([promise, new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error('Portal connection timed out')), ms);
+  })]).finally(() => clearTimeout(timer));
+}
 
-  async init(){
-    const s = sdk();
-    if (!s) return false;
-    try {
-      // v2 initialises itself; older builds expose an explicit init
-      if (typeof s.init === 'function') await s.init();
-      ready = true;
-      return true;
-    } catch (e){ console.warn('[verdant] platform SDK init failed:', e?.message || e); return false; }
+async function loadSdk(){
+  if (sdk() || typeof document === 'undefined') return sdk();
+  await new Promise(resolve => {
+    const script = document.createElement('script');
+    script.id = 'crazygames-sdk';
+    script.dataset.optional = 'true';
+    script.src = 'https://sdk.crazygames.com/crazygames-sdk-v3.js';
+    script.async = true;
+    const timer = setTimeout(resolve, 5000);
+    script.onload = script.onerror = () => { clearTimeout(timer); resolve(); };
+    document.head.appendChild(script);
+  });
+  return sdk();
+}
+
+// SDK methods can reject asynchronously, including on non-portal hosts.
+// Catch promises as well as synchronous exceptions so an optional integration
+// cannot put a fatal error banner over a running game.
+function gameEvent(name){
+  if (!ready) return false;
+  try {
+    const result = sdk()?.game?.[name]?.();
+    Promise.resolve(result).catch(() => {});
+    return true;
+  } catch { return false; }
+}
+
+export const platform = {
+  get available(){ return ready; },
+  get environment(){ return environment; },
+
+  init(){
+    if (initializing) return initializing;
+    initializing = (async () => {
+      const s = await loadSdk();
+      if (!s) return false;
+      try {
+        /* Ask before knocking. On a domain the portal does not recognise, the
+           SDK refuses every call — including init() — and the refusal arrives
+           as a rejection the page's error reporter would otherwise show to the
+           player. This is the check its own error message asks for. */
+        if (s.environment === 'disabled'){ environment = 'disabled'; return false; }
+        await deadline(s.init(), 5000);
+        environment = s.environment || 'disabled';
+        ready = environment === 'crazygames' || environment === 'local';
+        if (ready && loadingStarted) gameEvent('loadingStart');
+        return ready;
+      } catch (e){ console.warn('[verdant] portal unavailable, using device saves:', e?.message || e); return false; }
+    })();
+    return initializing;
   },
 
   /* Loading: measured by the platform, and it wants the pair. */
-  loadingStart(){ try { sdk()?.game?.sdkGameLoadingStart?.(); } catch {} },
-  loadingStop(){ try { sdk()?.game?.sdkGameLoadingStop?.(); } catch {} },
+  loadingStart(){
+    if (loadingStarted) return;
+    loadingStarted = true;
+    // Bootstrap asks for this before the optional SDK has finished loading;
+    // init() flushes it once the platform connection is ready.
+    gameEvent('loadingStart');
+  },
+  loadingStop(){
+    if (!loadingStarted) return;
+    loadingStarted = false;
+    gameEvent('loadingStop');
+  },
 
   /** Edge-triggered: call it every time the state might have changed. */
   setPlaying(playing){
-    if (playing === this._playing) return;
+    if (!ready || playing === this._playing) return;
     this._playing = playing;
-    try {
-      const g = sdk()?.game;
-      if (playing) g?.gameplayStart?.(); else g?.gameplayStop?.();
-    } catch {}
+    gameEvent(playing ? 'gameplayStart' : 'gameplayStop');
   },
   _playing: false,
 
   /** A real moment — a boss falling, a tower escaped. Rare, by instruction. */
-  happytime(){ try { sdk()?.game?.happytime?.(); } catch {} },
+  happytime(){ gameEvent('happytime'); },
 
   /* The signed-in player. Full Launch wants their CrazyGames name used rather
      than asking for another one; `null` means "ask the player", which is what
      happens everywhere else. */
   async user(){
     const s = sdk();
-    if (!s?.user) return null;
+    if (!ready || !s?.user) return null;
     try {
       if (s.user.isUserAccountAvailable === false) return null;
       const u = await s.user.getUser();
@@ -80,8 +128,9 @@ export const platform = {
    The same shape as localStorage, so call sites read the same as before. */
 const memory = new Map();
 const backend = () => {
-  const d = sdk()?.data;
-  if (d) return d;                       // survives their iframe; syncs for signed-in players
+  // The local SDK supplies mock data. Actual portal saves use its Data module;
+  // our own site and development keep their existing localStorage progress.
+  if (ready && environment === 'crazygames') return sdk()?.data || null;
   try {
     if (typeof localStorage !== 'undefined'){ localStorage.getItem('verdant.probe'); return localStorage; }
   } catch {}                             // Safari in a third-party iframe throws on access itself
@@ -90,7 +139,7 @@ const backend = () => {
 
 export const storage = {
   getItem(key){
-    try { const b = backend(); if (b) return b.getItem(key); } catch {}
+    try { const b = backend(); if (b) return b.getItem(key) ?? memory.get(key) ?? null; } catch {}
     return memory.has(key) ? memory.get(key) : null;
   },
   setItem(key, value){

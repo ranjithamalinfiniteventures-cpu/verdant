@@ -59,14 +59,26 @@
   function booted() { return !!(window.VERDANT && window.VERDANT.frames > 0); }
 
   window.addEventListener('error', function (e) {
-    if (e && e.target && e.target.tagName === 'SCRIPT')
+    if (e && e.target && e.target.tagName === 'SCRIPT') {
+      if (e.target.getAttribute('data-optional') === 'true') return;
       return show('A script failed to load', (e.target.src || 'inline script'));
+    }
     var detail = (e && e.message ? e.message : e) + ' · ' + ((e && e.filename) || '') + ':' + ((e && e.lineno) || '');
+    if (optional(detail)) return;
     if (booted()) banner(detail); else show('Uncaught error', detail.replace(' · ', '\n'));
   }, true);
 
+  /* The portal SDK is an optional integration: on a domain it does not know it
+     refuses every call. That is a normal state for our own site and for a
+     downloaded build, and it must never become an error in front of a player.
+     The game has already fallen back to device saves by this point. */
+  function optional(text) {
+    return /crazysdk|crazygames/i.test(String(text || ''));
+  }
+
   window.addEventListener('unhandledrejection', function (e) {
     var detail = (e && e.reason && (e.reason.stack || e.reason.message)) || e.reason;
+    if (optional(detail)) return;
     if (booted()) banner(String(detail).split('\n')[0]); else show('Unhandled promise rejection', detail);
   });
 
@@ -84,6 +96,7 @@
         return;
       }
       if (!window.VERDANT) {
+        if (window.VERDANT_BOOTING) { setTimeout(check, 2000); return; }
         show('The game did not start',
           'No error was thrown, but window.VERDANT was never set.\n' +
           'That usually means a module failed to resolve or WebGL is unavailable.');
@@ -531,12 +544,12 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
 #zones{position:absolute;inset:0;z-index:19;display:grid;place-items:center;padding:20px;overflow-y:auto;
   pointer-events:auto;background:radial-gradient(ellipse at 50% 40%,rgba(46,8,38,.82),rgba(3,5,9,.96))}
 #zones[hidden]{display:none}
-.zones-panel{width:min(760px,94vw)}
+.zones-panel{width:min(1040px,100%)}
 .zones-panel header{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
 .zones-panel h2{margin:0;font:800 clamp(22px,3.4vw,38px)/1 var(--f);letter-spacing:.14em;color:#fff}
 #zones-close{width:44px;height:44px;border-radius:50%;border:1px solid #3b5962;background:#0e1a22;color:#fff;
   font:700 24px/1 var(--f);cursor:pointer;flex:none}
-.zone-cards{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.zone-cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
 .zone-card{position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:6px;text-align:left;
   padding:18px;min-height:260px;border-radius:16px;cursor:pointer;color:#fff;font-family:var(--f);overflow:hidden;
   border:2px solid transparent;transition:transform .15s,border-color .15s,box-shadow .15s}
@@ -545,6 +558,10 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
 .zone-card.pit{background:linear-gradient(160deg,#3d0f36,#12060f);border-color:#8a2a6e}
 .zone-card.pit:hover,.zone-card.pit:focus-visible{border-color:#ff3fa8;box-shadow:0 0 30px rgba(255,63,168,.35)}
 .zone-card.tower:hover,.zone-card.tower:focus-visible{border-color:#7ef0d8;box-shadow:0 0 30px rgba(126,240,216,.25)}
+.zone-card.eclipse{background:radial-gradient(ellipse at 70% 0%,#59402a,transparent 65%),linear-gradient(155deg,#112b40,#060e17);border-color:#786344}
+.zone-card.eclipse:hover,.zone-card.eclipse:focus-visible{border-color:#ffc271;box-shadow:0 0 32px rgba(255,182,82,.25)}
+.zone-card.eclipse small{color:#ffd08a}
+.zone-card.current{border-style:double;border-width:3px}
 .zc-art{align-self:stretch;height:118px;display:grid;place-items:center;margin-bottom:4px}
 .zc-art svg{height:100%;width:auto}
 .zone-card strong{font-size:20px;letter-spacing:.12em;font-weight:800}
@@ -553,7 +570,7 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
   border-radius:999px;background:rgba(255,255,255,.08)}
 .zone-card.tower small{color:#7ef0d8}.zone-card.pit small{color:#ff8ed0}
 .zones-note{margin:14px 2px 0;font-size:11px;letter-spacing:.06em;line-height:1.5;color:rgba(255,255,255,.45);text-align:center}
-@media(max-width:560px){.zone-cards{grid-template-columns:1fr;gap:12px}.zone-card{min-height:0;padding:14px}
+@media(max-width:700px){.zone-cards{grid-template-columns:1fr;gap:12px}.zone-card{min-height:0;padding:14px}
   .zc-art{height:70px}.zone-card strong{font-size:17px}}
 
 /* the pit's HUD: the tower header becomes a wave readout */
@@ -597,6 +614,18 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
   background:#ff2f9a;color:#fff;cursor:pointer;box-shadow:0 4px 0 #8e1456}
 .eo-actions button:active{transform:translateY(2px);box-shadow:0 2px 0 #8e1456}
 .eo-actions button.ghost{background:transparent;border:1px solid #3b5962;color:#bdece7;box-shadow:none}
+
+/* Eclipse shares the wave HUD with Heartwood, but has its own foundry palette. */
+#hud.eclipse .xp{border-color:#7dbac6}
+#hud.eclipse .xp i{background:linear-gradient(180deg,#a4fbff,#3dcddf);box-shadow:0 0 12px #3dcddf66}
+#hud.eclipse #wave-banner small,#hud.eclipse .eo-eyebrow{color:#85eff5}
+#hud.eclipse #wave-banner b{color:#fff6df;text-shadow:0 0 30px #ffb75277,0 4px 0 #0007}
+#hud.eclipse #wave-banner span{color:#ffc271}
+#hud.eclipse #endless-over{background:radial-gradient(ellipse at 50% 45%,#16344bc9,#030912f2)}
+#hud.eclipse #endless-over .card{background:linear-gradient(180deg,#132b3ff0,#070f1af5);border-color:#526c77}
+#hud.eclipse #endless-over h2{color:#ffc271;text-shadow:0 0 22px #ffb75255}
+#hud.eclipse .eo-actions button:not(.ghost){background:#ffc271;color:#142330;box-shadow:0 4px 0 #8c632f}
+#hud.eclipse #eo-board .lb-head span{color:#85eff5}
 
 /* mercy: this used to only announce itself through a toast that got stomped
    0.75s later by the ordinary floor-name toast, so nobody ever saw it fire.
@@ -694,10 +723,10 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
 }
 </style>
 <!-- CrazyGames SDK: gameplay events, sitelock, storage that survives their
-     iframe, and the signed-in player's name. Loaded async and every call into
-     it is guarded, so the game runs identically with the script absent —
-     itch, a downloaded build, or our own site. -->
-<script async src="https://sdk.crazygames.com/crazygames-sdk-v2.js"></script>
+     iframe, and the signed-in player's name. The bootstrap module loads it
+     asynchronously and every call into it is guarded, so the game runs
+     identically with the script absent — itch, a downloaded build, or our own
+     site. -->
 <script type="importmap">
 {"imports":{
   "three":"./vendor/three.module.min.js",
@@ -765,7 +794,7 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
     <div id="perf">–</div>
     <div id="flash"></div>
     <div id="toast"></div>
-    <div id="results"><div class="card">
+    <div id="results" hidden><div class="card">
       <h2>EXTRACTED</h2>
       <p class="sub">You got off VERDANT alive.</p>
       <div class="stats">
@@ -787,7 +816,7 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
     </div></div>
     <div id="dead"><b>SIGNAL LOST</b><small>REBOOTING SUIT</small></div>
     <div id="wave-banner" hidden><small id="wb-eyebrow">INCOMING</small><b id="wb-title">WAVE 1</b><span id="wb-sub"></span></div>
-    <div id="endless-over"><div class="card">
+    <div id="endless-over" hidden><div class="card">
       <small class="eo-eyebrow">HEARTWOOD PIT</small>
       <h2>OVERRUN</h2>
       <div class="eo-wave"><span>YOU FELL ON WAVE</span><b id="eo-wave">0</b></div>
@@ -837,6 +866,22 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
             <em>ENDLESS · ONE ARENA · NO WAY OUT</em>
             <small id="zc-pit-state">BEST WAVE —</small>
           </button>
+          <button class="zone-card eclipse" data-zone="eclipse">
+            <span class="zc-art"><svg viewBox="0 0 120 110" aria-hidden="true">
+              <defs><radialGradient id="zc-corona"><stop offset=".48" stop-color="#ffc271"/><stop offset=".66" stop-color="#f4a743" stop-opacity=".65"/><stop offset="1" stop-color="#f4a743" stop-opacity="0"/></radialGradient></defs>
+              <circle cx="60" cy="32" r="30" fill="url(#zc-corona)"/><circle cx="60" cy="32" r="17" fill="#040d16" stroke="#ffdc9e" stroke-width="1.5"/>
+              <ellipse cx="60" cy="33" rx="36" ry="12" fill="none" stroke="#75e8ef" stroke-width="1.5" transform="rotate(-22 60 33)"/>
+              <path d="M12 64L32 50h56l20 14v25L86 104H34L12 89z" fill="#112633" stroke="#748e9a" stroke-width="2"/>
+              <path d="M16 71h88M16 86h88M42 54v47M78 54v47" stroke="#51dfea" stroke-width="1" opacity=".65"/>
+              <path d="M78 55v45" stroke="#ffc271" stroke-width="5" opacity=".75"/>
+              <ellipse cx="60" cy="77" rx="17" ry="10" fill="#0a1620" stroke="#ffc271" stroke-width="1.5"/>
+              <path d="M60 59l5 10-5 10-5-10z" fill="#ffdc9e"/>
+              <ellipse cx="60" cy="68" rx="10" ry="5" fill="none" stroke="#5aedf5" stroke-width="1.4" transform="rotate(-40 60 68)"/>
+            </svg></span>
+            <strong>ECLIPSE FOUNDRY</strong>
+            <em>ENDLESS · DODGE THE REACTOR LANES</em>
+            <small id="zc-eclipse-state">NEW ZONE · ENTER</small>
+          </button>
         </div>
         <p class="zones-note" id="zones-note">Leaving the tower keeps your floor. A tower run that visits the pit is not ranked.</p>
       </div>
@@ -881,6 +926,6 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
     <div id="bar"><i></i></div>
   </div></div>
 </div>
-<script type="module" src="./src/main.js"></script>
+<script type="module" src="./src/bootstrap.js"></script>
 </body>
 </html>
