@@ -495,7 +495,11 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
 .story-controls{display:flex;align-items:center;gap:18px}.story-controls button{font:800 11px var(--f);letter-spacing:.16em;color:#eafffa;background:transparent;border:1px solid #3b626a;border-radius:8px;padding:13px 18px;cursor:pointer}
 #story-next{background:#73e7d31c;border-color:#73e7d3}#story-skip{position:absolute;right:4%;top:5%;border:0;color:#71858b}
 #story-step{margin-left:auto;color:#58747c;font-size:11px;letter-spacing:.2em}
-.tile.story-replay{font:800 11px var(--f);color:#bdece7;cursor:pointer;padding:0;border:1px solid var(--tile-b)}
+/* The word STORY needs 36px and the square tile gives 32, so it spilled past
+   its own border. Let this one tile size to its label; the icon tiles stay
+   square. */
+.tile.story-replay{font:800 11px var(--f);color:#bdece7;cursor:pointer;border:1px solid var(--tile-b);
+  width:auto;min-width:calc(var(--u)*3.1);padding:0 calc(var(--u)*.7);letter-spacing:.04em}
 /* Story presentation is deliberately plain: black, white type, no imagery. */
 #story{display:grid;grid-template-columns:1fr;grid-template-rows:1fr;background:#000;cursor:pointer}
 #story .story-copy{align-items:center;text-align:center;padding:clamp(24px,7vw,100px);background:#000}
@@ -589,6 +593,9 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
 
 /* the pit's HUD: the tower header becomes a wave readout */
 #hud.endless .pips,#hud.endless .floor-rooms,#hud.endless #minimap,#hud.endless #store-tutorial{display:none}
+/* The arenas have no minimap, so nothing needs to sit below one: the tools and
+   the wave bar take the space the map would have used. */
+#hud.endless .h.tl{top:calc(var(--u)*1.2)}
 #hud.endless .xp{border-color:rgba(255,63,168,.55)}
 #hud.endless .xp i{background:linear-gradient(180deg,#ff8ed0,#ff2f9a);box-shadow:0 0 calc(var(--u)*1.2) rgba(255,47,154,.65)}
 
@@ -716,6 +723,9 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
   #minimap{top:10px;left:10px}
   #hud .h.tl{top:118px}
   #hud .h.tc{top:165px}
+  /* no map in the arenas: everything moves up into that corner */
+  #hud.endless .h.tl{top:10px}
+  #hud.endless .h.tc{top:58px}
   #hud .rem{display:none}                /* the pips already show the progress */
   #boon{top:344px}
   #bossbar{top:390px}

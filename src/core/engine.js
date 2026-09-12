@@ -174,17 +174,22 @@ export class Engine {
   follow(pos, vel, dt){
     this.camLook.copy(pos).addScaledVector(vel, 0.34);
     if (this.arenaView){
-      // The Foundry's distant eclipse needs a shallower, wider composition.
-      // Still follow movement, keeping the pilot readable on narrow screens.
-      this.camLook.multiplyScalar(0.55);
-      this.camLook.z -= 4;
+      /* A shallower, slightly wider composition for the Foundry — but only
+         slightly. Pulling the look point 45% back toward the middle left the
+         pilot stranded near the screen edge whenever they fought at the rim. */
+      this.camLook.multiplyScalar(0.8);
+      this.camLook.z -= 2;
     }
     this.camLook.y = 0;
     this.camLook.x = THREE.MathUtils.clamp(this.camLook.x, -this.clampX, this.clampX);
     this.camLook.z = THREE.MathUtils.clamp(this.camLook.z, -this.clampZ, this.clampZ);
     this.camTarget.lerp(this.camLook, 1 - Math.pow(0.0016, dt));
     this._off.copy(this.camOffset).multiplyScalar(this.zoom * this.roomZoom);
-    if (this.arenaView) this._off.set(0, 23, 29).multiplyScalar(Math.max(2.05, this.zoom * 1.45));
+    /* Was (0,23,29) x 2.05 — a camera 76 units out, nearly three times the
+       tower's framing, which shrank the player to a speck. This sits about a
+       quarter further back than a normal room: enough to read the arena, close
+       enough to read yourself. */
+    if (this.arenaView) this._off.set(0, 21, 24).multiplyScalar(Math.max(1.15, this.zoom * 1.05));
     this.camera.position.copy(this.camTarget).add(this._off);
     this.camera.lookAt(this.camTarget.x, this.camTarget.y + 1.1, this.camTarget.z);
 
