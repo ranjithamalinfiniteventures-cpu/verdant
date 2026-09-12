@@ -125,7 +125,10 @@ class AudioEngine {
     this._rebuilding = true;
     const old = this.ctx;
     this.ctx = null; this.ready = false; this._unlocked = false;
-    try { old?.close?.(); } catch {}
+    // close() rejects asynchronously on an already-closed context, and the page
+    // reporter listens for unhandled rejections — catch the promise, not just
+    // the call.
+    try { Promise.resolve(old?.close?.()).catch(() => {}); } catch {}
     try { this.init(); } finally { this._rebuilding = false; }
     this._unlock();
   }
