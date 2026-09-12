@@ -119,6 +119,11 @@ platform.init();
 platform.loadingStart();
 // a portal mute (an ad, or the site's own mute) beats our ♪ button
 platform.onSettings(s => audio.setPlatformMute(!!s.muteAudio));
+/* A hidden tab is not gameplay. The loop stops with the tab, so without this the
+   platform would be told the fight started and never that it stopped. */
+document.addEventListener('visibilitychange', () => { if (document.hidden) platform.setPlaying(false); });
+addEventListener('blur', () => platform.setPlaying(false));
+addEventListener('pagehide', () => platform.setPlaying(false));
 
 const engine  = new Engine(document.getElementById('c'));
 const input   = new Input(engine.canvas, document.getElementById('stick'));
@@ -165,6 +170,11 @@ if (POWER_TEST){
   armory.render();
   applyPowerBuffs();
 }
+/* Create the save on the first run rather than on the first coin. A player who
+   closes the tab a minute in should come back to the game remembering them, and
+   it means progress is written through the platform's storage from the start
+   instead of whenever the first pickup happens. */
+if (armory.fresh) armory.save();
 armory.vault = vault;
 armory.hud = hud;   // lets buyHeal() reflect the new HP bar immediately
 const storeTutorial = new StoreTutorial(engine.scene, armory);

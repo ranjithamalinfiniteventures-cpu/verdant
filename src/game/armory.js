@@ -28,6 +28,7 @@ export class Armory {
        teaches, in one visit to the shop, because sending them back out to earn
        150 coins between the two lessons breaks the chain. */
     if (!hasSave) this.coins = FIRST_UPGRADE_COST + GRENADE_PRICE;
+    this.fresh = !hasSave;                 // main.js writes the save slot at boot
     this.dialog = document.getElementById('armory');
     this.cards = document.getElementById('gun-list');
     this.status = document.getElementById('armory-status');
