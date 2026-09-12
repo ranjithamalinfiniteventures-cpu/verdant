@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+performance.mark('verdant:module');   // the bundle has parsed and started running
 import { Engine }        from './core/engine.js';
 import { Input }         from './core/input.js';
 import { buildRoom }     from './game/room.js';
@@ -134,7 +135,17 @@ const revealGame = () => {
   bootStarted = true;
   hud.ready();
   platform.loadingStop();
+  performance.mark('verdant:playable');
+  try {
+    const span = (name, a, b) => { performance.measure(name, a, b); return Math.round(performance.getEntriesByName(name).pop().duration); };
+    console.info('[verdant] boot ms —',
+      'download+parse:', span('verdant:download', 'verdant:boot', 'verdant:module'),
+      '· engine:', span('verdant:engine-up', 'verdant:module', 'verdant:engine'),
+      '· first floor:', span('verdant:first-floor', 'verdant:engine', 'verdant:playable'),
+      '· total:', Math.round(performance.now()));
+  } catch {}
 };
+performance.mark('verdant:engine');   // renderer, lights and post-processing are up
 const story = new Story(({ firstRun }) => {
   if (firstRun) revealGame();
 });

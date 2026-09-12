@@ -55,6 +55,9 @@ writeFileSync(join(dist, 'index.html'), html);
 
 cpSync(join(root, 'assets'), join(dist, 'assets'), { recursive: true });
 cpSync(join(root, 'THIRD-PARTY.md'), join(dist, 'THIRD-PARTY.md'));
+// the privacy notice ships with the game, so the in-game link works on a portal
+// too, where there is no server of ours to link back to
+cpSync(join(root, 'privacy.html'), join(dist, 'privacy.html'));
 
 // the notices are a legal condition of shipping, not a nicety — fail the build
 // rather than quietly publishing without them

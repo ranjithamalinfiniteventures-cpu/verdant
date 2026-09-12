@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Verdant: Tower Escape — Privacy</title>
+<style>
+  :root{color-scheme:dark}
+  body{margin:0;background:#0b1016;color:#d7e6e4;font:15px/1.65 system-ui,-apple-system,Segoe UI,sans-serif}
+  main{max-width:680px;margin:0 auto;padding:48px 22px 72px}
+  h1{font-size:26px;letter-spacing:.04em;margin:0 0 4px}
+  .sub{color:#7d9a97;margin:0 0 32px;font-size:13px}
+  h2{font-size:15px;letter-spacing:.09em;text-transform:uppercase;color:#7ef0d8;margin:32px 0 8px}
+  p,li{color:#c3d6d4}
+  a{color:#7ef0d8}
+  code{background:#131c25;padding:1px 5px;border-radius:4px;font-size:13px}
+</style>
+</head>
+<body>
+<main>
+  <h1>Verdant: Tower Escape</h1>
+  <p class="sub">Privacy notice · last updated 13 September 2026</p>
+
+  <p>This is a browser game. It has no accounts of its own, no advertising of its
+  own, and no analytics or tracking scripts. What it does store is listed here in full.</p>
+
+  <h2>On your device</h2>
+  <p>Your progress — coins, weapon levels, perks, best wave, settings and which
+  tutorial steps you have seen — is saved in your browser's storage, or through
+  the host platform's save system when you play on a portal such as CrazyGames.
+  It never leaves your device unless you submit a score. Clearing your browser
+  data erases it.</p>
+
+  <h2>If you submit a score</h2>
+  <p>Submitting is optional: nothing is sent unless you press the submit button
+  on the results screen. When you do, this is sent and stored:</p>
+  <ul>
+    <li>the callsign you typed (any name you like — it need not be your own),</li>
+    <li>your score: floors or waves reached, kills, run time,</li>
+    <li>the time of submission.</li>
+  </ul>
+  <p>The server also stores a <strong>salted one-way hash</strong> of your IP
+  address so one person cannot flood the board. The address itself is never
+  written down, and the hash cannot be turned back into it.</p>
+  <p>Scores are held in a Supabase database and served by a function on Vercel.
+  They are public by design — that is what a leaderboard is.</p>
+
+  <h2>What is never collected</h2>
+  <p>No email, no real name, no location, no device fingerprint, no advertising
+  identifier, no cross-site tracking, and no cookies of any kind.</p>
+
+  <h2>Playing on a portal</h2>
+  <p>When the game runs on a portal, that portal's own privacy policy covers
+  their page, their accounts and any advertising they show. This notice covers
+  only what the game itself does.</p>
+
+  <h2>Removing a score</h2>
+  <p>Ask and it will be deleted. Open an issue at
+  <a href="https://github.com/ranjithamalinfiniteventures-cpu/verdant/issues">the
+  project's issue tracker</a> with the callsign and roughly when you played.</p>
+</main>
+</body>
+</html>

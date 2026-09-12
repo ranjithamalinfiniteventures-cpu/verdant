@@ -336,6 +336,10 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
   border-radius:calc(var(--u)*.8);border:2px solid #7ef0d8;background:rgba(126,240,216,.12);
   color:#bff8ec;cursor:pointer}
 #results button:hover{background:rgba(126,240,216,.24)}
+/* The one place the game collects anything is the score submit, so the notice
+   lives there rather than in a popup nobody reads. */
+.privacy-note{margin:8px 0 0;font-size:10px;line-height:1.5;letter-spacing:.02em;color:#6f8f8b;text-align:left}
+.privacy-note a{color:#8fd8cb}
 /* two ways out of the results screen: run the tower again, or go and see how
    long you last in the arenas */
 #results .rs-actions{display:flex;gap:calc(var(--u)*.8);justify-content:center;flex-wrap:wrap;
@@ -896,6 +900,7 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
           <input id="rs-name" maxlength="12" placeholder="YOUR CALLSIGN" autocomplete="off" spellcheck="false">
           <button id="rs-submit">SUBMIT TIME</button>
         </div>
+        <p class="privacy-note">Submitting stores your callsign and score on the public board. Nothing else leaves your device. <a href="./privacy.html" target="_blank" rel="noopener">What is stored</a></p>
       </div>
       <div class="rs-actions">
         <button id="rs-again">RUN AGAIN</button>
@@ -922,6 +927,7 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
           <input id="eo-name" maxlength="12" placeholder="YOUR CALLSIGN" autocomplete="off" spellcheck="false">
           <button id="eo-submit">SUBMIT WAVE</button>
         </div>
+        <p class="privacy-note">Submitting stores your callsign and score on the public board. Nothing else leaves your device. <a href="./privacy.html" target="_blank" rel="noopener">What is stored</a></p>
       </div>
       <div class="eo-actions"><button id="eo-again">FIGHT AGAIN</button><button id="eo-tower" class="ghost">BACK TO THE TOWER</button></div>
     </div></div>
