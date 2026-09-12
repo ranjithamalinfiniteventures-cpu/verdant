@@ -23,9 +23,11 @@ export class Armory {
         if (GUNS.some(g => g.id === saved.selected) && this.levels[saved.selected]) this.selected = saved.selected;
       }
     } catch {}
-    // A fresh player starts with exactly one purchase to make: the first laser
-    // upgrade. Existing saves keep their earned balance.
-    if (!hasSave) this.coins = FIRST_UPGRADE_COST;
+    /* A fresh player starts with exactly two purchases to make: the first laser
+       upgrade and their first grenade — the two things the opening floor
+       teaches, in one visit to the shop, because sending them back out to earn
+       150 coins between the two lessons breaks the chain. */
+    if (!hasSave) this.coins = FIRST_UPGRADE_COST + GRENADE_PRICE;
     this.dialog = document.getElementById('armory');
     this.cards = document.getElementById('gun-list');
     this.status = document.getElementById('armory-status');
@@ -121,41 +123,32 @@ export class Armory {
     const missing = 1 - this.player.hp;
     const full = missing <= 0.001;
     const cost = this.healCost();
-    this.medbayEl.innerHTML = `
-      <article class="medbay-card ${full ? 'full' : ''}">
-        <div class="medbay-info">
-          <h3>PATCH UP</h3>
-          <small>${full ? 'SUIT AT FULL INTEGRITY' : `RESTORE TO FULL · ${Math.round(missing * 100)}% DAMAGE`}</small>
-          <p>${this.healsThisRun
-            ? `Price climbs the more you lean on it — this would be patch #${this.healsThisRun + 1} this run.`
-            : 'A steep price for skipping the risk. Fine in a pinch; costly as a habit.'}</p>
-        </div>
-        <button data-medbay="heal" ${full || this.coins < cost ? 'disabled' : ''}>
-          ${full ? 'Full health' : `Patch up · ${cost} coins`}
-        </button>
-      </article>
-      ${this.renderGrenade()}`;
-  }
-  /* Buy as many as you can afford; the pouch holds two. Coming back for more
-     mid-floor costs a walk to the pad and two seconds standing still on it. */
-  renderGrenade(){
     const n = this.nades;
-    if (!n) return '';
-    const full = !n.canBuy;
-    const poor = this.coins < GRENADE_PRICE;
-    return `
-      <article class="medbay-card ordnance ${n.stock ? 'owned' : ''}">
-        <div class="medbay-info">
-          <h3>FRAG GRENADE</h3>
-          <small>POUCH ${n.stock} / ${CARRY_CAP} · ${GRENADE_PRICE} COINS EACH</small>
-          <p>${full
-            ? 'The pouch is full. Throw one and come back for another — the Armory restocks as often as you can pay.'
-            : 'Buy as many as you can afford across a run; you carry two at a time. Tap the grenade button, then tap where it should land.'}</p>
-        </div>
-        <button data-grenade="buy" ${full || poor ? 'disabled' : ''}>
-          ${full ? 'Pouch full' : poor ? `Need ${GRENADE_PRICE} coins` : `Buy 1 · ${GRENADE_PRICE} coins`}
-        </button>
-      </article>`;
+    const coin = `<span class="price"><i></i>%s</span>`;
+    this.medbayEl.innerHTML = `
+      <button class="supply ${full ? 'full' : ''}" data-medbay="heal" ${full || this.coins < cost ? 'disabled' : ''}
+              title="${full ? 'Already at full health' : `Patch up — ${cost} coins`}"
+              aria-label="${full ? 'Already at full health' : `Patch up for ${cost} coins`}">
+        <svg viewBox="0 0 48 48" aria-hidden="true">
+          <rect x="5" y="13" width="38" height="26" rx="6" fill="#c0392b" stroke="#ff9e8a" stroke-width="2"/>
+          <rect x="18" y="7" width="12" height="7" rx="2" fill="#8e2a1e" stroke="#ff9e8a" stroke-width="2"/>
+          <path d="M24 20v12M18 26h12" stroke="#fff" stroke-width="4.5" stroke-linecap="round"/>
+        </svg>
+        ${coin.replace('%s', cost)}
+      </button>
+      ${n ? `
+      <button class="supply ordnance" data-grenade="buy" ${!n.canBuy || this.coins < GRENADE_PRICE ? 'disabled' : ''}
+              title="${!n.canBuy ? 'Pouch full' : `Buy a grenade — ${GRENADE_PRICE} coins`}"
+              aria-label="${!n.canBuy ? 'Grenade pouch full' : `Buy a grenade for ${GRENADE_PRICE} coins`}">
+        <svg viewBox="0 0 48 48" aria-hidden="true">
+          <circle cx="22" cy="29" r="13" fill="#3b2a14" stroke="#ffb066" stroke-width="2"/>
+          <rect x="17" y="11" width="10" height="7" rx="2" fill="#3b2a14" stroke="#ffb066" stroke-width="2"/>
+          <path d="M27 14c5-4 10-3 12 1" stroke="#ffb066" stroke-width="3" fill="none" stroke-linecap="round"/>
+          <path d="M14 25h16M14 31h16" stroke="#ffb066" stroke-width="2.4" stroke-linecap="round"/>
+        </svg>
+        ${coin.replace('%s', GRENADE_PRICE)}
+        <b class="have">${n.stock}/${CARRY_CAP}</b>
+      </button>` : ''}`;
   }
   buyGrenade(){
     const n = this.nades;

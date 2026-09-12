@@ -10,7 +10,7 @@ const element = () => ({ textContent:'', innerHTML:'', open:false, addEventListe
 // armory.js saves through the platform storage shim (src/core/platform.js), so
 // that is what the sandbox has to provide — localStorage is no longer touched.
 const store = {getItem(k){return storage.get(k) ?? null},setItem(k,v){storage.set(k,String(v))},removeItem(k){storage.delete(k)}};
-const context = vm.createContext({gunIllustration(){return ''},document:{getElementById(id){if(!elements.has(id))elements.set(id,element());return elements.get(id)}},storage:store,localStorage:store});
+const context = vm.createContext({gunIllustration(){return ''},GRENADE_PRICE:150,CARRY_CAP:2,document:{getElementById(id){if(!elements.has(id))elements.set(id,element());return elements.get(id)}},storage:store,localStorage:store});
 vm.runInContext(definitions + armorySource + '\nglobalThis.Armory = Armory; globalThis.GUNS=GUNS;', context);
 const color = () => ({set(){}});
 const player = {equipGun(){},pos:{x:0,z:0},gun:{material:{color:color()}},muzzle:{material:{emissive:color()}},mats:[],vel:{x:0,z:0,set(){}}};
@@ -19,14 +19,20 @@ const weapon = {equip(g,l){equipped={id:g.id,level:l}}};
 const input = {keys:new Set(),stickEl:{classList:{remove(){}}}};
 const a = new context.Armory(weapon,player,input);
 assert.equal(context.GUNS.length,5);
-assert.equal(a.coins,120,'fresh players receive exactly the first laser upgrade cost');
+assert.equal(a.coins,270,'a fresh player can afford the first laser upgrade AND their first grenade — both opening-floor lessons in one shop visit');
 a.open();assert.equal(a.paused,false,'cannot open away from station');
 for(let i=0;i<119;i++)a.update(1/60,{store:{x:0,z:0}},'fight');
 assert.equal(a.paused,false,'must wait full two seconds');
 a.update(0.05,{store:{x:0,z:0}},'fight');assert.equal(a.paused,true);
 assert.equal(a.act('plasma','buy'),false);
 assert.equal(a.act('rail','equip'),false);
-a.earn(1130); assert.equal(a.act('scatter','buy'),true); assert.equal(a.coins,0); assert.equal(equipped.id,'scatter');
+// exactly the price of a scatter, however many coins a run starts with
+const scatterPrice = context.GUNS.find(g => g.id === 'scatter').price;
+a.earn(scatterPrice - a.coins);
+const before = a.coins;
+assert.equal(a.act('scatter','buy'),true);
+assert.equal(a.coins, before - scatterPrice, 'a purchase deducts exactly its price');
+assert.equal(equipped.id,'scatter');
 assert.equal(a.act('scatter','buy'),false);
 a.earn(50000);
 for(let i=0;i<4;i++) assert.equal(a.act('scatter','upgrade'),true);
