@@ -19,8 +19,9 @@ import { Story }         from './ui/story.js';
 import { FloorUpgrades } from './ui/floor-upgrades.js';
 import { audio }         from './core/audio.js';
 import { Vault }         from './game/vault.js';
-import { buildArena, ARENA_R } from './game/arena.js';
+import { buildArena } from './game/arena.js';
 import { Endless }       from './game/endless.js';
+import { buildEclipse, ECLIPSE_KEY } from './game/eclipse.js';
 import { Zones }         from './ui/zones.js';
 import { Grenades, NadeStock, blastCenter, BLAST_R, THROW_RANGE } from './game/grenade.js';
 
@@ -29,6 +30,7 @@ const POWER_TEST = ['localhost', '127.0.0.1', '::1'].includes(location.hostname)
   && new URLSearchParams(location.search).has('power')
   && !new URLSearchParams(location.search).has('normal');
 let assistedRun = POWER_TEST;
+const isTypingTarget = e => e.target?.matches?.('input,textarea,select,[contenteditable="true"]');
 
 /* --------------------------------------------------------- mercy system --
    If a player dies 3 times on the same floor they get a small free buff.
@@ -240,6 +242,7 @@ armory.onProgress = (station,visible,fraction) => {
 const state = {
   phase: 'fight',        // fight | exit | enter | dead | escaped | over (endless)
   mode: 'tower',         // tower | endless
+  arenaId: 'endless',    // endless combat is shared by Heartwood and Eclipse
   module: 0,
   budget: 0, remaining: 0, spawned: 0, spawnCd: 0,
   cleared: false, upgradeIn: null,
@@ -534,21 +537,30 @@ armory.onGrenade = () => updateNadeHud();
    It borrows the whole combat loop (fight() branches on state.mode where the
    two differ) and swaps the room for buildArena(), the floor budget for the
    Endless wave director, and the floor header for a wave readout. */
-const endless = new Endless(storage);
+const arenaDirectors = {
+  endless: new Endless(storage),
+  eclipse: new Endless(storage, ECLIPSE_KEY),
+};
+let endless = arenaDirectors.endless;
+const arenaName = () => state.arenaId === 'eclipse' ? 'ECLIPSE FOUNDRY' : 'HEARTWOOD PIT';
 let towerResume = null;          // where the tower run was when you left for the pit
 
-const zones = new Zones({ onPick: (zone) => (zone === 'endless' ? enterEndless() : leaveEndless()) });
+const zones = new Zones({ onPick: zone => zone === 'tower' ? leaveEndless() : enterEndless(zone) });
 document.getElementById('zones-open').addEventListener('click', e => { e.stopPropagation(); openZones(); });
 
 function openZones(){
   if (zones.paused || floorUpgrades.paused || armory.paused || story.active) return;
   if (state.phase !== 'fight' && state.phase !== 'enter') return;   // not mid-death, exit or results
   const towerFloor = (state.mode === 'tower' ? state.module : (towerResume ? towerResume.module : 0)) + 1;
-  zones.open({ mode: state.mode, towerFloor, best: endless.best });
+  zones.open({ mode: state.mode === 'tower' ? 'tower' : state.arenaId, towerFloor,
+    best: arenaDirectors.endless.best, eclipseBest: arenaDirectors.eclipse.best });
 }
 
-function enterEndless(){
+function enterEndless(arenaId = 'endless'){
+  if (arenaId !== 'endless' && arenaId !== 'eclipse') return;
   if (state.mode === 'tower') towerResume = { module: state.module, run: { ...state.run }, biomass: state.biomass };
+  state.arenaId = arenaId;
+  endless = arenaDirectors[arenaId];
   state.mode = 'endless';
   restartEndless();
 }
@@ -583,11 +595,12 @@ function loadArena(){
   hud.setBoss(null);
   room?.dispose();
   armory.dwell = 0; armory.storeLatched = false;
-  room = buildArena(engine.scene);
-  lights.mood('heartwood');
-  lights.fit(ARENA_R * 2, ARENA_R * 2);
+  room = state.arenaId === 'eclipse' ? buildEclipse(engine.scene) : buildArena(engine.scene);
+  lights.mood(state.arenaId === 'eclipse' ? 'eclipse' : 'heartwood');
+  lights.fit(room.R * 2, room.R * 2);
   // an open pit wants the widest framing the camera allows
-  engine.fitRoom(40, 28, ARENA_R * 2, ARENA_R * 2);
+  engine.fitRoom(40, 28, room.R * 2, room.R * 2);
+  engine.arenaView = state.arenaId === 'eclipse';
   enemies.clear(); weapon.clear(); loot.clear(); gems.clear();
   state.zones = room.zones; state.activeRoom = 0;
   state.budget = 0; state.remaining = 0; state.spawned = 0; state.spawnCd = 0;
@@ -601,7 +614,7 @@ function loadArena(){
   applyPerks(true);
   hud.setShield(player.shield);
   guide.setFloor(room);
-  hud.setEndlessMode(true);
+  hud.setEndlessMode(true, state.arenaId);
   updateEndlessHud();
 }
 
@@ -627,7 +640,7 @@ function updateEndlessHud(){
   const total = endless.spec ? endless.spec.count : 0;
   const left = endless.toSpawn + enemies.alive + (state.bossFight && boss.alive ? 1 : 0);
   hud.setEndless({ wave: endless.wave, left, total, best: Math.max(endless.best, endless.wave),
-    breather, timer: endless.timer });
+    breather, timer: endless.timer, name: arenaName() });
 }
 
 function onWaveStart(){
@@ -635,7 +648,8 @@ function onWaveStart(){
   room.pulse();
   room.setDanger(Math.min(1, (s.n - 1) / 20));
   room.ventsOn = s.n >= 3;                 // the vents wake once you have your feet
-  hud.waveBanner(s);
+  hud.waveBanner(s, state.arenaId);
+  if (state.arenaId === 'eclipse' && s.n === 3) hud.toast('AMBER LANES DISCHARGE · LURE GROWTH INTO THEM', 4000);
   audio.door?.();
   engine.addShake(s.boss ? 0.45 : 0.2);
   if (!s.boss) return;
@@ -666,6 +680,8 @@ function onWaveClear(){
   hud.toast(`WAVE ${n} CLEARED · +${bonus} COINS`, 2200);
   audio.clear();
   room.pulse();
+  room.ventsOn = false;
+  room.resetVents();
   nades.enterFloor('pit');                 // two fresh throws for the next wave
   updateNadeHud();
   if (endless.upgradeDue) state.upgradeIn = { t: 1.1, unlock: () => {} };
@@ -1164,7 +1180,7 @@ function transition(dt, dir){
     if(state.phaseT>=ENTER_T){
       state.phase='fight';
       if (state.mode === 'endless'){
-        hud.toast('HEARTWOOD PIT · SURVIVE', 1900);
+        hud.toast(`${arenaName()} · SURVIVE`, 1900);
         return;
       }
       state.spawnCd = storeTutorial.active && state.module === 0 ? 999 : .7;
@@ -1182,6 +1198,7 @@ function transition(dt, dir){
         wave: endless.wave, best: endless.best, newBest: state.newBest,
         kills: state.run.kills, seconds: state.run.t, coins: state.run.coins, gems: state.run.gems,
         assisted: POWER_TEST,
+        arenaId: state.arenaId,
       }, () => restartEndless(), () => leaveEndless());
     }
     return;
@@ -1243,6 +1260,19 @@ if (new URLSearchParams(location.search).has('nopost')) engine.setPost(false);
 const DEV_HOST = ['localhost', '127.0.0.1', '::1'].includes(location.hostname);
 if (DEV_HOST){
   const q = new URLSearchParams(location.search);
+
+  /* ?maxed — every gun at level 5 and a full wallet, for judging whether a
+     floor is hard because of the floor or because of the loadout. It writes to
+     the save like a normal purchase would, so it sticks until you clear it
+     (?maxed=0 puts you back to a starting laser). Kept behind DEV_HOST. */
+  if (q.has('maxed')){
+    const off = q.get('maxed') === '0';
+    for (const g of GUNS) armory.levels[g.id] = off ? (g.id === 'laser' ? 1 : 0) : 5;
+    armory.selected = off ? 'laser' : (q.get('gun') && GUNS.some(g => g.id === q.get('gun')) ? q.get('gun') : 'plasma');
+    armory.coins = off ? 0 : 99999;
+    armory.apply(); armory.save(); armory.render();
+    hud.toast(off ? 'LOADOUT RESET · LASER LV 1' : 'ALL GUNS LV 5 · TEST LOADOUT', 2600);
+  }
   const wantsBoss = q.has('boss');
   const floorParam = Number(q.get('floor'));
   const jumpTo = wantsBoss ? MODULES.length - 1
@@ -1250,10 +1280,10 @@ if (DEV_HOST){
     : -1;
 
   // ?endless — straight into the Heartwood Pit
-  if (q.has('endless')){
+  if (q.has('endless') || q.has('eclipse')){
     story.finish?.();
     revealGame();
-    enterEndless();
+    enterEndless(q.has('eclipse') ? 'eclipse' : 'endless');
   }
 
   if (jumpTo >= 0){
@@ -1367,13 +1397,17 @@ addEventListener('keyup', e => {
   if ((e.code === 'KeyG' || e.code === 'Space') && aim.on && aim.mode === 'key') releaseAim();
 });
 addEventListener('keydown', e => {
+  if (!isTypingTarget(e) && ['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code)) e.preventDefault();
+  if (isTypingTarget(e)) return;
   if (e.code === 'KeyB' && !e.repeat){ armory.paused ? armory.close() : armory.hintStore(); }
   if (e.code === 'KeyM') hud.setMuted(!audio.toggle());
   if (e.code === 'KeyZ' && !e.repeat){ zones.paused ? zones.close() : openZones(); }
   if (e.code === 'KeyG' || e.code === 'Space'){
     if (aim.on || startAim('key')) e.preventDefault();
   }
-  if (e.code === 'Escape' && aim.on){ e.preventDefault(); cancelAim(); }
+  // Escape is reserved by CrazyGames for leaving fullscreen. Cancel our local
+  // aim too, but let the browser/platform keep its default action.
+  if (e.code === 'Escape' && aim.on){ cancelAim(); }
   if (e.code === 'KeyP') hud.togglePerf();
   if (e.code === 'BracketRight') engine.setQuality(Math.min(3, engine.quality + 1));
   if (e.code === 'BracketLeft')  engine.setQuality(Math.max(0, engine.quality - 1));
@@ -1387,7 +1421,7 @@ requestAnimationFrame(() => requestAnimationFrame(() => {
 window.VERDANT = {
   engine, input, player, enemies, weapon, loot, gems, vault, fx, guide, boss, hud, state, tick, audio, armory, story, storeTutorial, floorUpgrades,
   MODULES, startModule, restartRun, THREE,
-  endless, zones, enterEndless, leaveEndless, restartEndless, grenades, nades, platform, storage, throwGrenade, aim, startAim, releaseAim, cancelAim, aimPoint,
+  get endless(){ return endless; }, zones, enterEndless, leaveEndless, restartEndless, grenades, nades, platform, storage, throwGrenade, aim, startAim, releaseAim, cancelAim, aimPoint,
   get frames(){ return frames; },
   get room(){ return room; }
 };
