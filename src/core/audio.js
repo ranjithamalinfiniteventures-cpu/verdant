@@ -84,11 +84,50 @@ class AudioEngine {
     this.resume();
   }
 
+  /* Getting the sound back, which is mostly a Safari problem.
+
+     Safari suspends the context whenever the tab is hidden or the system takes
+     the audio session (another tab plays, a call arrives, the machine sleeps),
+     and it uses a non-standard 'interrupted' state for the latter. The part
+     that makes a naive retry loop useless: after an interruption resume() can
+     resolve happily while the graph stays silent forever. The only reliable
+     cure is to throw the context away and build a new one — which is safe here
+     because nothing outside this file holds a reference to a node. */
   resume(){
-    if (this.ctx && ['suspended', 'interrupted'].includes(this.ctx.state)){
-      // A later real gesture can retry if the browser refuses this attempt.
-      this.ctx.resume().catch(() => {});
-    }
+    const ctx = this.ctx;
+    if (!ctx) return;
+    if (ctx.state === 'running'){ this._unlock(); return; }
+    ctx.resume().catch(() => {});
+    clearTimeout(this._resumeCheck);
+    // give the resume a moment; if it did not really take, rebuild once
+    this._resumeCheck = setTimeout(() => {
+      if (!this._gestured) return;                  // no gesture yet: nothing is allowed to start
+      if (this.ctx && this.ctx.state !== 'running') this._rebuild();
+      else this._unlock();
+    }, 400);
+  }
+
+  /** A one-sample silent buffer: how Safari decides a context is really awake. */
+  _unlock(){
+    const ctx = this.ctx;
+    if (!ctx || ctx.state !== 'running' || this._unlocked) return;
+    try {
+      const b = ctx.createBuffer(1, 1, ctx.sampleRate);
+      const s = ctx.createBufferSource();
+      s.buffer = b; s.connect(ctx.destination); s.start(0);
+      this._unlocked = true;
+    } catch {}
+  }
+
+  /** Last resort: tear the whole graph down and build it again. */
+  _rebuild(){
+    if (this._rebuilding) return;
+    this._rebuilding = true;
+    const old = this.ctx;
+    this.ctx = null; this.ready = false; this._unlocked = false;
+    try { old?.close?.(); } catch {}
+    try { this.init(); } finally { this._rebuilding = false; }
+    this._unlock();
   }
 
   _noise(sec){
@@ -531,6 +570,14 @@ export const audio = new AudioEngine();
 
 // Capture UI gestures too: story/cards stop propagation before canvas input.
 if (typeof window !== 'undefined' && window.addEventListener){
-  window.addEventListener('pointerdown', () => audio.init(), { capture:true });
-  window.addEventListener('keydown', () => audio.init(), { capture:true });
+  const gesture = () => { audio._gestured = true; audio.init(); };
+  window.addEventListener('pointerdown', gesture, { capture:true });
+  window.addEventListener('keydown', gesture, { capture:true });
+  // Safari counts touchend, not pointerdown, as the gesture that unlocks audio
+  window.addEventListener('touchend', gesture, { capture:true });
+  /* Coming back to the tab is when Safari has usually suspended us. Resuming
+     here often works on its own; when it doesn't, the next tap rebuilds. */
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) audio.resume(); });
+  window.addEventListener('pageshow', () => audio.resume());
+  window.addEventListener('focus', () => audio.resume());
 }
