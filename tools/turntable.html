@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>VERDANT · press renders</title>
+<style>
+  body{margin:0;background:#141a22;color:#cfe;font:13px/1.5 system-ui,sans-serif;padding:16px}
+  #out{display:flex;flex-wrap:wrap;gap:10px;margin-top:12px}
+  figure{margin:0;text-align:center;background:#0c1016;border:1px solid #26323f;border-radius:8px;padding:6px}
+  figcaption{font-size:11px;opacity:.75;margin-top:4px}
+  img{width:150px;height:150px;display:block;
+      background:repeating-conic-gradient(#1b222c 0 25%,#141a22 0 50%) 0 0/16px 16px}
+</style>
+<script type="importmap">
+{"imports":{"three":"../vendor/three.module.min.js","three/addons/":"../vendor/addons/"}}
+</script>
+</head>
+<body>
+<h3>Press renders</h3>
+<div id="log">rendering…</div>
+<div id="out"></div>
+
+<script type="module">
+/* Character and enemy renders for thumbnails and store art.
+   Transparent PNGs on a fixed-size canvas, so it works with the window at any
+   size, and each one is POSTed to the dev server's /__shot endpoint, which
+   writes it to .shots/press/. Run it with `python3 serve.py 5173` and open
+   http://localhost:5173/tools/turntable.html */
+import * as THREE from 'three';
+import { Player } from '../src/game/player.js';
+import { TYPES } from '../src/game/enemies.js';
+
+const SIZE = 768;
+const log = document.getElementById('log'), out = document.getElementById('out');
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+renderer.setSize(SIZE, SIZE, false);
+renderer.setPixelRatio(1);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.15;
+renderer.shadowMap.enabled = false;
+
+const scene = new THREE.Scene();
+scene.background = null;                            // transparent PNG
+
+/* A neutral three-point rig: key from the front-left, fill from the right, rim
+   behind, so the silhouette stays readable on any background a thumbnail uses. */
+const key = new THREE.DirectionalLight(0xffffff, 2.6); key.position.set(-4, 7, 6);
+const fill = new THREE.DirectionalLight(0xbfe9ff, 1.1); fill.position.set(6, 3, 4);
+const rim = new THREE.DirectionalLight(0xffd9a0, 1.8); rim.position.set(0, 4, -7);
+scene.add(key, fill, rim, new THREE.HemisphereLight(0xcfefff, 0x20303c, 0.9));
+
+const subject = new THREE.Group();
+scene.add(subject);
+
+const camera = new THREE.PerspectiveCamera(28, 1, 0.1, 100);
+
+/** Frame whatever is in `subject`, from a given yaw, and return a PNG. */
+function shoot(yaw, tilt = 0.28, pad = 1.28){
+  subject.rotation.y = yaw;
+  subject.updateMatrixWorld(true);
+  const box = new THREE.Box3().setFromObject(subject);
+  const size = box.getSize(new THREE.Vector3()), mid = box.getCenter(new THREE.Vector3());
+  const radius = Math.max(size.x, size.y, size.z) * 0.5 || 1;
+  const dist = radius / Math.tan((camera.fov * Math.PI / 180) / 2) * pad;
+  camera.position.set(Math.sin(0) * dist, mid.y + dist * Math.sin(tilt), Math.cos(0) * dist * Math.cos(tilt));
+  camera.lookAt(mid.x, mid.y, mid.z);
+  renderer.render(scene, camera);
+  return renderer.domElement.toDataURL('image/png');
+}
+
+async function save(name, dataUrl){
+  await fetch('/__shot', { method: 'POST',
+    headers: { 'X-Shot-Name': name, 'X-Shot-Ext': 'png', 'X-Shot-Dir': 'press' },
+    body: dataUrl });
+  const fig = document.createElement('figure');
+  const img = new Image(); img.src = dataUrl;
+  const cap = document.createElement('figcaption'); cap.textContent = name;
+  fig.append(img, cap); out.appendChild(fig);
+}
+
+function clearSubject(){ while (subject.children.length) subject.remove(subject.children[0]); }
+
+/** The enemies are drawn as instanced parts; rebuild one as a plain model. */
+function enemyModel(key){
+  const g = new THREE.Group();
+  for (const p of TYPES[key].parts()){
+    const m = new THREE.Mesh(p.geo, p.mat);
+    m.position.set(p.x || 0, p.y || 0, p.z || 0);
+    if (p.flat) m.rotation.x = -Math.PI / 2;      // the game lays these down too
+    g.add(m);
+  }
+  return g;
+}
+
+const shots = [];
+// --- the pilot, four sides -------------------------------------------------
+const player = new Player(scene);
+player.group.position.set(0, 0, 0);
+scene.remove(player.group);
+subject.add(player.group);
+player.body.visible = true;
+/* The contact-shadow decal grounds the character on a floor; in a transparent
+   cutout it is a grey ellipse floating under him. */
+player.group.traverse(o => { if (o.isMesh && o.geometry?.type === 'PlaneGeometry') o.visible = false; });
+for (const [name, yaw] of [['front', 0], ['right', Math.PI * 0.5], ['back', Math.PI], ['left', Math.PI * 1.5]]){
+  shots.push(['pilot-' + name, shoot(yaw)]);
+}
+// one three-quarter hero angle, which is what most thumbnails actually want
+shots.push(['pilot-hero', shoot(Math.PI * 0.18, 0.34, 1.22)]);
+clearSubject();
+
+// --- every enemy -----------------------------------------------------------
+for (const key of Object.keys(TYPES)){
+  const model = enemyModel(key);
+  subject.add(model);
+  shots.push(['enemy-' + key, shoot(Math.PI * 0.15, 0.3, 1.24)]);
+  clearSubject();
+}
+
+for (const [name, url] of shots) await save(name, url);
+log.textContent = `${shots.length} renders written to .shots/press/ — ${SIZE}x${SIZE} transparent PNG`;
+window.__done = shots.map(s => s[0]);
+</script>
+</body>
+</html>

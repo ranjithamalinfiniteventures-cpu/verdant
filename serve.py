@@ -54,7 +54,13 @@ class NoCache(http.server.SimpleHTTPRequestHandler):
         os.makedirs('.shots', exist_ok=True)
         name = self.headers.get('X-Shot-Name') or f'shot-{int(time.time()*1000)}'
         name = ''.join(c for c in name if c.isalnum() or c in '-_')
-        path = os.path.join('.shots', name + '.jpg')
+        ext = (self.headers.get('X-Shot-Ext') or 'jpg').lower()
+        ext = ext if ext in ('jpg', 'png') else 'jpg'
+        sub = self.headers.get('X-Shot-Dir') or ''
+        sub = ''.join(c for c in sub if c.isalnum() or c in '-_')
+        folder = os.path.join('.shots', sub) if sub else '.shots'
+        os.makedirs(folder, exist_ok=True)
+        path = os.path.join(folder, name + '.' + ext)
         with open(path, 'wb') as f:
             f.write(base64.b64decode(body))
         self.send_response(200)

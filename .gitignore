@@ -4,3 +4,6 @@ dist/
 
 # the upload zip: rebuild with `npm run build` then zip dist/
 verdant-crazygames.zip
+
+# generated character/enemy renders — rebuild with tools/turntable.html
+press/
