@@ -278,12 +278,17 @@ storeTutorial.onComplete = () => {
    floor 1 does not mean the player un-learned 40% of the game. */
 const PROGRESS_KEY = 'verdant.progress.v1';
 let bestProgress = Number(storage.getItem(PROGRESS_KEY)) || 0;
+let progressSent = false;
 function reportProgress(pct){
   const v = Math.max(0, Math.min(100, Math.round(pct)));
-  if (v <= bestProgress) return;
-  bestProgress = v;
-  try { storage.setItem(PROGRESS_KEY, String(v)); } catch {}
-  platform.reportProgress(v);
+  /* Report the first floor too. Floor 1 is 0%, which is not an INCREASE on a
+     fresh save, so the platform was told nothing at all until floor 2 — and a
+     player who never reaches floor 2 is exactly the one worth reporting. */
+  if (progressSent && v <= bestProgress) return;
+  progressSent = true;
+  bestProgress = Math.max(bestProgress, v);
+  try { storage.setItem(PROGRESS_KEY, String(bestProgress)); } catch {}
+  platform.reportProgress(bestProgress);
 }
 
 /* ------------------------------------------------------------- modules -- */
