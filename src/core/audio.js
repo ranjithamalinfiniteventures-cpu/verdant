@@ -7,13 +7,12 @@
 
 import { storage } from './platform.js';
 
-/* The generative bed: a low drone that opens up as the room fills, with a
-   chord voicing drifting through every nine seconds or so. It has been off
-   since the first commit to save the oscillators, but a top-down shooter with
-   nothing under it reads as broken rather than as quiet — silence was reported
-   as a bug twice. It rides at 0.24 of master and the ♪ button still mutes
-   everything. */
-const MUSIC_ENABLED = true;
+/* The generative bed — a low drone that opens up as the room fills, with a
+   chord drifting through every nine seconds. Tried on, judged wrong for the
+   game: effects carry it better on their own. Off means never started, so the
+   three oscillators, the LFO and the chord scheduler cost nothing at all.
+   Flip this to hear it again; _startMusic() below is intact. */
+const MUSIC_ENABLED = false;
 
 const clamp = (v, a, b) => Math.min(Math.max(v, a), b);
 const rand  = (a, b) => a + Math.random() * (b - a);
