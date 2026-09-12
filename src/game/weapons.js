@@ -8,8 +8,8 @@ export const GUNS = [
   { id:'laser', name:'PRUNING LASER', price:0, damage:1, fireRate:6.2, range:9.2, boltSpeed:46, spread:0.035, color:0x9ff5ff, scale:[1,1,1.35], recoil:0.16, description:'Precise cyan streaks · crisp sliding recoil' },
   { id:'scatter', name:'EMBER SCATTER', price:1250, damage:0.85, fireRate:1.8, range:7, boltSpeed:34, spread:0.38, pellets:5, color:0xffa34d, scale:[1.4,1.4,0.45], recoil:0.32, description:'Five fiery pellets · heavy barrel kick' },
   { id:'rapid', name:'NEEDLE DRIVE', price:3000, damage:0.65, fireRate:13, range:8.5, boltSpeed:52, spread:0.09, color:0xa3ff82, scale:[0.65,0.65,0.8], recoil:0.1, description:'Rapid green needles · spinning barrel' },
-  { id:'rail', name:'VIOLET RAIL', price:5500, damage:5, fireRate:1.15, range:13, boltSpeed:85, spread:0, pierce:true, color:0xd8a4ff, scale:[0.85,0.85,3], recoil:0.28, description:'Piercing violet lance · charging pulse' },
-  { id:'plasma', name:'SOLAR PLASMA', price:9000, damage:3, fireRate:1.6, range:9, boltSpeed:23, spread:0, splash:2.1, color:0xffdc66, scale:[3,3,0.32], recoil:0.25, description:'Pulsing gold orbs · expanding impact ring' }
+  { id:'rail', name:'VIOLET RAIL', price:5500, damage:5.8, fireRate:1.35, range:13, boltSpeed:85, spread:0, pierce:true, color:0xd8a4ff, scale:[0.85,0.85,3], recoil:0.28, description:'Piercing violet lance · charging pulse' },
+  { id:'plasma', name:'SOLAR PLASMA', price:9000, damage:3.6, fireRate:1.9, range:9, boltSpeed:23, spread:0, splash:2.1, color:0xffdc66, scale:[3,3,0.32], recoil:0.25, description:'Pulsing gold orbs · expanding impact ring' }
 ];
 export const PRUNING_LASER = GUNS[0];
 

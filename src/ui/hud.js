@@ -454,7 +454,7 @@ export class Hud {
     });
   }
 
-  showResults(stats, onAgain){
+  showResults(stats, onAgain, onArenas){
     const $$ = id => document.getElementById(id);
     $$('rs-floors').textContent = stats.floors;
     $$('rs-kills').textContent  = stats.kills;
@@ -481,6 +481,11 @@ export class Hud {
 
     const btn = $$('rs-again');
     btn.onclick = () => { this.hideResults(); onAgain(); };
+    const pit = $$('rs-pit');
+    if (pit){
+      pit.hidden = !onArenas;
+      pit.onclick = () => { this.hideResults(); onArenas?.(); };
+    }
     const results = document.getElementById('results');
     results.hidden = false;
     results.classList.add('on');

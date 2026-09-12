@@ -784,8 +784,16 @@ function pickType(mix){
    Solar Plasma are 10.1 and 9.6 — they trade rate for per-shot punch. A
    monotonically rising health curve therefore cannot hold time-to-kill perfectly
    flat, and the small step up at floor 11 is that, not a bug. */
+/* Enemy health stops growing after floor 10. Everything above it gets harder
+   through numbers, mix and room pressure instead — the +0.03 a floor it used to
+   add was small enough to be invisible as a difficulty knob but large enough to
+   push time-to-kill past what the guns keep up with, since gun DPS is not
+   monotonic (see the note above). Room depth still scales: the last room of a
+   floor is the hard one, by design. */
+const COIN_PER_UNIT = 7;
+
 export function floorHpScale(floor, roomIndex = 0){
-  return 1 + Math.min(floor, 9) * 0.18 + Math.max(0, floor - 9) * 0.03 + roomIndex * 0.08;
+  return 1 + Math.min(floor, 9) * 0.18 + roomIndex * 0.08;
 }
 export function floorDamageScale(floor, roomIndex = 0){
   return Math.min(2.4, 1 + Math.min(floor, 9) * 0.12 + Math.max(0, floor - 9) * 0.04 + roomIndex * 0.06);
@@ -1102,7 +1110,11 @@ function fight(dt){
 
   const sweep = state.cleared || (E && endless.phase === 'breather');
   const got = loot.update(dt, player, sweep, room.bounds);
-  if (got){ state.biomass += got; const coins = Math.round(got * 5 * loot.valueMul);
+  /* 7 a unit, not 5. At five, a perfect 20-floor run paid ~12.5k while owning
+     the four guns alone costs 18.75k before a single upgrade, heal or grenade —
+     the economy could not fund the power curve it was balanced against, which
+     is most of why the middle floors bit. */
+  if (got){ state.biomass += got; const coins = Math.round(got * COIN_PER_UNIT * loot.valueMul);
     state.run.coins += coins; armory.earn(coins); hud.collectCoins(coins);
     fx.burst({x:player.pos.x, y:0.65, z:player.pos.z}, {count:4, color:0xf5c518, speed:2, size:0.065, life:0.22, up:0.8}); }
   const gotGems = gems.update(dt, player, sweep, room.bounds);
@@ -1208,7 +1220,10 @@ function transition(dt, dir){
       state.resultsShown = true;
       hud.showResults(
         { floors: state.run.floors, kills: state.run.kills, coins: state.run.coins, seconds: state.run.t, gems: state.run.gems, assisted:assistedRun },
-        () => { state.resultsShown = false; restartRun(); }
+        () => { state.resultsShown = false; restartRun(); },
+        // straight from the results into the wave arenas, which is where a
+        // finished tower run naturally wants to go next
+        () => { state.resultsShown = false; restartRun(); openZones(); }
       );
     }
   }

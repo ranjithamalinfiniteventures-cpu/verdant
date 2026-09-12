@@ -38,7 +38,13 @@ vm.runInContext(`${scaleFns}\nglobalThis.scale={floorHpScale,floorDamageScale};`
 const { floorHpScale, floorDamageScale } = context.scale;
 // pools: creeper 40 + stalker 14 + sporeling 24 + thornbeast 10 + bloomer 6 + seeder 10 = 104 slots
 for (const f of FLOORS) assert.ok(f.maxAlive + 6 <= 104, `${f.name} cannot exceed the enemy pools`);
-for (let i = 1; i < FLOORS.length; i++) assert.ok(floorHpScale(i) > floorHpScale(i - 1), 'health keeps rising');
+/* Health climbs through the first ten floors and then holds: above that the
+   tower gets harder by numbers, mix and room pressure, not by giving every
+   creeper more hit points than the guns can chew through. */
+for (let i = 1; i <= 9; i++) assert.ok(floorHpScale(i) > floorHpScale(i - 1), 'health rises over the first ten floors');
+for (let i = 10; i < FLOORS.length; i++) assert.equal(floorHpScale(i), floorHpScale(9), `floor ${i + 1} must not add health`);
+// but the last room of a floor is still the hard one
+assert.ok(floorHpScale(14, 3) > floorHpScale(14, 0), 'rooms deeper into a floor still scale');
 assert.ok(floorHpScale(19) < 3.2, 'top-floor health stays under 3.2x');
 
 /* The real property: the tower must get harder as you climb, but not by turning

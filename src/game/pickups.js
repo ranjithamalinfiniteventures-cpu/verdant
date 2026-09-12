@@ -49,7 +49,7 @@ export class Pickups {
 
   get pending(){ return this.list.some(p => p.alive); }
 
-  /** Collected reward units; each unit is worth five coins. */
+  /** Collected reward units; main.js turns each one into coins. */
   update(dt, player, sweep = false, bounds = null){
     let got = 0, dirty = false;
     for (let i = 0; i < this.max; i++){

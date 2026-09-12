@@ -308,6 +308,15 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
   border-radius:calc(var(--u)*.8);border:2px solid #7ef0d8;background:rgba(126,240,216,.12);
   color:#bff8ec;cursor:pointer}
 #results button:hover{background:rgba(126,240,216,.24)}
+/* two ways out of the results screen: run the tower again, or go and see how
+   long you last in the arenas */
+#results .rs-actions{display:flex;gap:calc(var(--u)*.8);justify-content:center;flex-wrap:wrap;
+  margin-top:calc(var(--u)*2.2)}
+/* the pair has to fit the card: trim the padding the single button could afford */
+#results .rs-actions button{margin-top:0;padding:calc(var(--u)*.85) calc(var(--u)*1.35);
+  font-size:calc(var(--u)*.85);letter-spacing:.14em}
+#results button.ghost{border-color:#c9a6ff;background:rgba(201,166,255,.10);color:#e4d4ff}
+#results button.ghost:hover{background:rgba(201,166,255,.22)}
 
 #dead{position:absolute;inset:0;display:grid;place-content:center;justify-items:center;gap:calc(var(--u)*.8);
   background:radial-gradient(ellipse at 50% 50%,rgba(60,6,6,.55),rgba(3,4,6,.92));
@@ -812,7 +821,10 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
           <button id="rs-submit">SUBMIT TIME</button>
         </div>
       </div>
-      <button id="rs-again">RUN AGAIN</button>
+      <div class="rs-actions">
+        <button id="rs-again">RUN AGAIN</button>
+        <button id="rs-pit" class="ghost">ENDLESS WAVES</button>
+      </div>
     </div></div>
     <div id="dead"><b>SIGNAL LOST</b><small>REBOOTING SUIT</small></div>
     <div id="wave-banner" hidden><small id="wb-eyebrow">INCOMING</small><b id="wb-title">WAVE 1</b><span id="wb-sub"></span></div>
