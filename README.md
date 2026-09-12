@@ -23,9 +23,10 @@ npm run build
 ```
 
 Writes `dist/` — one HTML file, one bundled+minified JS file, and the assets.
-About 944 KB on disk, ~240 KB gzipped, in **3 requests with no external
-network calls at all**. Zip the contents of `dist/` and upload it to a portal
-as-is.
+It is about 1 MB on disk and ships the game itself in **3 local requests**.
+When hosted on CrazyGames, the bootstrap makes one optional SDK request for
+platform integration; art, fonts, and Three.js remain fully local. Zip the
+contents of `dist/` and upload it to a portal as-is.
 
 Three.js and the Outfit font are both vendored into the repo rather than pulled
 from a CDN, so development is offline-clean too and the shipped game cannot
@@ -43,6 +44,8 @@ start on floor 20.
 |---|---|
 | `?boss` | top floor, Heartroot wakes immediately, endgame loadout (Solar Plasma lv5 + 4000 coins) |
 | `?floor=13` | start on that floor |
+| `?eclipse` | enter Eclipse Foundry directly |
+| `?maxed` | every gun at level 5 and a full wallet, for judging a floor on its own terms (`?maxed=0` restores a starting laser, `&gun=rail` picks what you hold) |
 
 `?boss` grants its loadout **in memory only** — it disables the armory's save for
 that session, so it cannot write a maxed gun into your real progress.
@@ -61,6 +64,25 @@ npm test
 |---|---|
 | `P` | toggle the FPS / frame-time / quality readout |
 | `]` `[` | raise / lower quality by hand |
+| `Z` | choose The Tower, Heartwood Pit, or Eclipse Foundry |
+
+## Eclipse Foundry
+
+A third zone, reached through **Choose a zone** in the upper-left HUD or `Z`.
+The suspended star-engine arena has an eclipsed sun, orbital rings, rift docks,
+relay crystals, a central gyroscope, and a cyan/gold interface. Its scenery is
+procedural Three.js geometry and shaders, with no additional network assets.
+
+It shares Heartwood's endless wave curve, fifth-wave surges, tenth-wave bosses,
+between-wave healing, permanent run upgrades, armory, and grenade allowance.
+From wave 3, amber reactor lanes give 1.8 seconds of warning before firing;
+they damage both the pilot and growth. From wave 12, two lanes charge at once.
+Hazards stop during breathers, and pause with the game. Best waves and scores
+are separate from Heartwood. Eclipse's leaderboard is **this device only**;
+it does not submit to the existing Heartwood server board.
+
+Switching arenas starts a fresh wave run. Returning to the tower resumes its
+floor, keeps earned currency, and makes that tower run unranked.
 
 ## What is built
 

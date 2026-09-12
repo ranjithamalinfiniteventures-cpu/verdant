@@ -1,3 +1,6 @@
 node_modules/
 dist/
 .shots/
+
+# the upload zip: rebuild with `npm run build` then zip dist/
+verdant-crazygames.zip

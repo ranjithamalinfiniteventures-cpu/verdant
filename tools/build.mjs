@@ -20,7 +20,7 @@ rmSync(dist, { recursive: true, force: true });
 mkdirSync(dist, { recursive: true });
 
 const result = await build({
-  entryPoints: [join(root, 'src/main.js')],
+  entryPoints: [join(root, 'src/bootstrap.js')],
   bundle: true,
   minify: true,
   format: 'esm',
@@ -47,9 +47,9 @@ const result = await build({
    the vendored copy gets loaded alongside the bundled one. */
 let html = readFileSync(join(root, 'index.html'), 'utf8');
 html = html.replace(/<script type="importmap">[\s\S]*?<\/script>\s*/, '');
-html = html.replace('<script type="module" src="./src/main.js"></script>',
+html = html.replace('<script type="module" src="./src/bootstrap.js"></script>',
                     '<script type="module" src="./verdant.js"></script>');
-if (/<script\s+type=["']importmap["']/.test(html) || /src=["']\.\/src\/main\.js["']/.test(html))
+if (/<script\s+type=["']importmap["']/.test(html) || /src=["']\.\/src\//.test(html))
   throw new Error('index.html rewrite failed — dist would still reference dev sources');
 writeFileSync(join(dist, 'index.html'), html);
 
