@@ -112,5 +112,5 @@ await leaderboard.eclipse.submit({ name: 'FORGE', wave: 9, kills: 160, seconds: 
 assert.equal((await leaderboard.eclipse.top())[0].wave, 9);
 assert.deepEqual(await leaderboard.endless.top(), [], 'no Eclipse scores in Heartwood');
 assert.deepEqual(await leaderboard.top(), [], 'no Eclipse scores in tower');
-assert.equal(leaderboard.eclipse.backend.remote, null, 'new scores never reach the wrong hosted board');
+assert.equal(leaderboard.eclipse.shared, false, 'runs stay on the device — there is no server to reach');
 console.log(`PASS: Eclipse hazards at 30/60/120 Hz, damage, safe routes, ${drawables} scenery objects, cleanup, separate records and scores`);

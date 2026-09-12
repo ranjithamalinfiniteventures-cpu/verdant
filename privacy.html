@@ -31,19 +31,10 @@
   It never leaves your device unless you submit a score. Clearing your browser
   data erases it.</p>
 
-  <h2>If you submit a score</h2>
-  <p>Submitting is optional: nothing is sent unless you press the submit button
-  on the results screen. When you do, this is sent and stored:</p>
-  <ul>
-    <li>the callsign you typed (any name you like — it need not be your own),</li>
-    <li>your score: floors or waves reached, kills, run time,</li>
-    <li>the time of submission.</li>
-  </ul>
-  <p>The server also stores a <strong>salted one-way hash</strong> of your IP
-  address so one person cannot flood the board. The address itself is never
-  written down, and the hash cannot be turned back into it.</p>
-  <p>Scores are held in a Supabase database and served by a function on Vercel.
-  They are public by design — that is what a leaderboard is.</p>
+  <h2>Scores</h2>
+  <p>Your best runs are kept in the same device storage as your progress. There
+  is no leaderboard server: nothing is uploaded, and no score of yours is
+  visible to anyone else.</p>
 
   <h2>What is never collected</h2>
   <p>No email, no real name, no location, no device fingerprint, no advertising
@@ -54,10 +45,9 @@
   their page, their accounts and any advertising they show. This notice covers
   only what the game itself does.</p>
 
-  <h2>Removing a score</h2>
-  <p>Ask and it will be deleted. Open an issue at
-  <a href="https://github.com/ranjithamalinfiniteventures-cpu/verdant/issues">the
-  project's issue tracker</a> with the callsign and roughly when you played.</p>
+  <h2>Removing your data</h2>
+  <p>Clear your browser's site data, or the game's saves in the portal you play
+  on. There is nothing held anywhere else to delete.</p>
 </main>
 </body>
 </html>
