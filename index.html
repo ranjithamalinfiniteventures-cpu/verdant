@@ -475,7 +475,12 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
 #store-progress[hidden]{display:none}@keyframes shop-rise{from{transform:translateY(45px);opacity:0}to{transform:translateY(0);opacity:1}}
 @media(max-width:560px){#armory{padding:12px;max-height:55dvh}.gun-card{flex-basis:195px}.weapon-art svg{height:90px}#armory h2{font-size:19px}}
 @media(max-height:550px){#armory{max-height:55dvh;padding:8px 16px}.weapon-art svg{height:65px}.gun-card h3{font-size:12px}.gun-info{padding:5px}.gun-actions{padding:5px}#armory h2{font-size:18px}}
-.floor-rooms{font-size:10px;color:#b9e6e4;margin:8px auto 0;max-width:70vw;line-height:1.5;text-shadow:0 2px 4px #000}.xp{width:calc(var(--u)*24)}
+/* The per-room roll-call ("CRYO WARD 15 / SECURITY LAB · UNEXPLORED · CLEAR
+   ALL 2 ROOMS") is off: the minimap already shows which rooms are left and the
+   guide arrow points at the door, and on a phone it ate three lines of the
+   screen. hud.setFloorRooms() still maintains it, so display:block brings it
+   back. */
+.floor-rooms{display:none;font-size:10px;color:#b9e6e4;margin:8px auto 0;max-width:70vw;line-height:1.5;text-shadow:0 2px 4px #000}.xp{width:calc(var(--u)*24)}
 
 /* First-run story. */
 #story{position:absolute;inset:0;z-index:30;display:grid;grid-template-columns:minmax(260px,1.05fr) minmax(300px,.95fr);
@@ -702,11 +707,16 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
   #bossbar:not([hidden]) ~ #toast{top:220px}
   #bossbar:not([hidden]) ~ #wave-banner{top:234px}
   #store-hint{bottom:74px;font-size:10px;max-width:46vw}
+  #hud .rem{display:none}                /* 450px of height has no room for it */
 }
 
 @media(max-width:480px){
-  #hud .h.tc{top:132px}                 /* clears the tl/tr/rc corner clusters above it */
-  #minimap{top:236px;left:10px}         /* clears the header's worst-case 4-room height */
+  /* The map is the thing you glance at most, so it gets the corner; the three
+     tool buttons drop below it and the floor bar below them. */
+  #minimap{top:10px;left:10px}
+  #hud .h.tl{top:118px}
+  #hud .h.tc{top:165px}
+  #hud .rem{display:none}                /* the pips already show the progress */
   #boon{top:344px}
   #bossbar{top:390px}
   #mercy{top:344px}

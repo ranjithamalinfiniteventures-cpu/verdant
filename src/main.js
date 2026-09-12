@@ -1399,6 +1399,11 @@ addEventListener('keydown', e => {
   if (!isTypingTarget(e) && ['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code)) e.preventDefault();
   if (isTypingTarget(e)) return;
   if (e.code === 'KeyB' && !e.repeat){ armory.paused ? armory.close() : armory.hintStore(); }
+  // Q swaps to the next gun you own, without a trip to the pad
+  if (e.code === 'KeyQ' && !e.repeat && !armory.paused){
+    const next = armory.cycleGun();
+    if (next) hud.toast(`${next.name} · LV ${armory.levels[next.id]}`, 1400);
+  }
   if (e.code === 'KeyM') hud.setMuted(!audio.toggle());
   if (e.code === 'KeyZ' && !e.repeat){ zones.paused ? zones.close() : openZones(); }
   // G takes the grenade out and puts it away; the click on the floor throws it

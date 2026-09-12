@@ -29,7 +29,13 @@ export class Armory {
     this.dialog = document.getElementById('armory');
     this.cards = document.getElementById('gun-list');
     this.status = document.getElementById('armory-status');
-    document.getElementById('armory-open').onclick = () => this.hintStore();
+    /* The weapon button swaps guns once you own more than one; with a single
+       gun there is nothing to swap, so it keeps pointing you at the shop. */
+    document.getElementById('armory-open').onclick = () => {
+      const next = this.cycleGun();
+      if (next) this.hud?.toast?.(`${next.name} · LV ${this.levels[next.id]}`, 1400);
+      else this.hintStore();
+    };
     document.getElementById('armory-close').onclick = () => this.close();
     this.dialog.addEventListener('close', () => { this.onClose?.(); this.resetInput(); document.getElementById('armory-open').focus(); });
     this.cards.addEventListener('click', e => {
@@ -211,6 +217,24 @@ export class Armory {
     this.onAction?.({ id, action, level:this.levels[id], coins:this.coins });
     return true;
   }
+  /** Guns you own, in the order they appear in the shop. */
+  get owned(){ return GUNS.filter(g => this.levels[g.id]); }
+  /* Swapping used to mean walking to the pad and opening the shop, which is a
+     long way to go for a decision the fight asks for constantly — Needle Drive
+     for a thornbeast, Solar Plasma for a crowd. The weapon button cycles what
+     you already own; it buys nothing, so it cannot be used to dodge a price. */
+  cycleGun(){
+    const own = this.owned;
+    if (own.length < 2) return null;
+    const next = own[(own.findIndex(g => g.id === this.selected) + 1) % own.length];
+    this.selected = next.id;
+    this.apply();
+    this.save();
+    if (this.paused) this.render();
+    audio.tap();
+    return next;
+  }
+
   apply(){
     const gun = GUNS.find(g => g.id === this.selected);
     this.weapon.equip(gun, this.levels[gun.id]);
