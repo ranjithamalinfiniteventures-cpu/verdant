@@ -92,7 +92,10 @@ export default async function handler(req, res){
     if (req.method === 'GET'){
       const limit = Math.min(50, Math.max(1, int(req.query.limit) || 10));
       const r = await sb(`${TABLE}?board=eq.${board}&select=${SELECT}&order=${ORDER[board]}&limit=${limit}`);
-      res.setHeader('cache-control', 'public, max-age=15, stale-while-revalidate=60');
+      /* Short, and no stale-while-revalidate: with SWR the CDN kept serving an
+         empty board for a minute after someone submitted, so a player finished
+         a run and could not find themselves on it. */
+      res.setHeader('cache-control', 'public, max-age=10');
       return res.status(200).json(await r.json());
     }
 

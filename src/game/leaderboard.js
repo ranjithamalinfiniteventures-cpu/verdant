@@ -70,7 +70,10 @@ class RemoteBackend {
       method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(entry),
     });
     if (!r.ok) throw new Error(`leaderboard ${r.status}`);
-    return await this.top(10);
+    /* The POST answers with the fresh top ten straight from the database. Use
+       it: re-reading through the CDN can hand back a cached board that does not
+       have the run we just wrote. */
+    return await r.json();
   }
 }
 

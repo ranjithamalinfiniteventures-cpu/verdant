@@ -244,10 +244,12 @@ export class Hud {
   }
 
   /* The pit's board: deepest wave first, ties to more kills. */
-  async renderEndlessBoard(mine){
+  /** `rows` skips the re-fetch: after a submit we already hold the fresh board,
+      and re-reading can return a cached one without the run just posted. */
+  async renderEndlessBoard(mine, rows){
     const list = document.getElementById('eo-list');
     if (!list) return;
-    const rows = await leaderboard.endless.top(8);
+    rows = rows || await leaderboard.endless.top(8);
     // after the fetch: `shared` only knows the server is there once it has answered
     document.getElementById('eo-scope').textContent = leaderboard.shared ? 'GLOBAL' : 'THIS DEVICE';
     list.textContent = '';
@@ -293,7 +295,7 @@ export class Hud {
       submit.textContent = 'SUBMITTED';
       const res = await leaderboard.endless.submit({ name: name.value, wave: stats.wave, kills: stats.kills,
         seconds: stats.seconds, assisted: stats.assisted });
-      await this.renderEndlessBoard(res && res.entry);
+      await this.renderEndlessBoard(res && res.entry, res && res.rows);
     };
     this.renderEndlessBoard(null);
     $$('eo-again').onclick = () => { this.hideEndlessOver(); onAgain(); };
@@ -413,9 +415,9 @@ export class Hud {
   setFlash(v){ this.el.flash.style.opacity = v; }
 
   /** Render the board; `mine` highlights the row just submitted. */
-  async renderBoard(mine){
+  async renderBoard(mine, rows){
     const list = document.getElementById('rs-list');
-    const rows = await leaderboard.top(10);
+    rows = rows || await leaderboard.top(10);
     document.getElementById('rs-scope').textContent =
       leaderboard.shared ? 'GLOBAL' : 'THIS DEVICE';
     list.textContent = '';
@@ -459,7 +461,7 @@ export class Hud {
       submit.disabled = true;
       submit.textContent = 'SUBMITTED';
       const res = await leaderboard.submit({ ...stats, name: name.value, required: this.floorCount });
-      await this.renderBoard(res && res.entry);
+      await this.renderBoard(res && res.entry, res && res.rows);
     };
     this.renderBoard(null);
 
