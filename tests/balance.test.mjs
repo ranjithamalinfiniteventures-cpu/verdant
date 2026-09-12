@@ -13,12 +13,24 @@ vm.runInContext(`${floorsSource}\n${gunDefs}\nglobalThis.data={FLOORS,GUNS};`, c
 const { FLOORS, GUNS } = context.data;
 
 assert.equal(FLOORS.length, 20);
+
+/* Population is measured PER ROOM, because that is the fight the player is
+   actually in: rooms are sealed one at a time, and floors alternate between
+   three and four of them. Judging raw totals is what let floors 11 and 12
+   through — three rooms holding 114 and 118 put ~39 enemies in every room while
+   floors 10 and 13 (four rooms) held ~28, and the totals still "rose", so the
+   curve looked monotonic while the game had a wall in it. */
+const perRoom = (i) => FLOORS[i].total / ((FLOORS[i].rooms || []).length || 1);
+
 for (let i = 1; i < FLOORS.length; i++) {
   if (FLOORS[i].bossArena) continue; // Boss pressure replaces the large normal wave.
-  assert.ok(FLOORS[i].total > FLOORS[i - 1].total, 'enemy population rises each floor');
   assert.ok(FLOORS[i].maxAlive > FLOORS[i - 1].maxAlive, 'pressure rises each floor');
   assert.ok(FLOORS[i].interval < FLOORS[i - 1].interval, 'spawn delay falls each floor');
+  assert.ok(perRoom(i) <= perRoom(i - 1) * 1.6,
+    `floor ${i + 1} (${FLOORS[i].name}) jumps to ${perRoom(i).toFixed(1)} enemies per room from ${perRoom(i - 1).toFixed(1)}`);
 }
+// the run must still get heavier overall, even though a given floor may dip
+assert.ok(perRoom(18) > perRoom(3) * 1.8, 'the top of the tower is far heavier than the bottom');
 assert.deepEqual(Array.from(GUNS, g => g.price), [0, 1250, 3000, 5500, 9000]);
 const mainSource = readFileSync(new URL('../src/main.js', import.meta.url), 'utf8');
 const scaleFns = mainSource.slice(mainSource.indexOf('export function floorHpScale'), mainSource.indexOf('function scaleEnemy')).replaceAll('export ', '');
@@ -84,4 +96,4 @@ assert.ok(0.07 * 2.4 < 0.25, 'one creeper hit never takes more than a quarter ba
 const floor5Hp = 1 + 4 * 0.18;
 const floor5Damage = 1 + 4 * 0.12;
 assert.ok(floor5Hp >= 1.7 && floor5Damage >= 1.45);
-console.log('PASS: prices rise, 20-floor population/pressure curve is monotonic, floor 5 scales health and damage');
+console.log('PASS: prices rise, per-room population curve has no cliffs, floor 5 scales health and damage');

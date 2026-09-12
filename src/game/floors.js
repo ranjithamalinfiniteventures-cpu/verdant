@@ -66,12 +66,12 @@ export const FLOORS = [
   /* The upper tower, 11–20. Pressure keeps rising through population and
      spawn tempo; the health/damage curve in main.js bends so it stays beatable.
      Every floor below 20 leans on one lesson — the mix says which. */
-  { name: 'GARDEN DECK', machine: 'planters',   plan: 'suite',     w: 56, d: 30, total: 114, maxAlive: 33, interval: 0.41,
+  { name: 'GARDEN DECK', machine: 'planters',   plan: 'suite',     w: 56, d: 30, total: 99, maxAlive: 33, interval: 0.41,
     accent: 0x86efac, tint: 0xe3ffe9, cove: 0xc8ffd6, layout: 'hydro',
     rooms: ['TERRACE', 'ORCHARD', 'POLLEN HOUSE'],
     mix: [['creeper', 3], ['sporeling', 4], ['seeder', 2], ['stalker', 1]] },
 
-  { name: 'FILTRATION', machine: 'turbine',     plan: 'triptych',  w: 58, d: 26, total: 118, maxAlive: 34, interval: 0.40,
+  { name: 'FILTRATION', machine: 'turbine',     plan: 'triptych',  w: 58, d: 26, total: 102, maxAlive: 34, interval: 0.40,
     accent: 0x7dd3fc, tint: 0xe6f7ff, cove: 0xcdefff, layout: 'spine',
     rooms: ['INTAKE', 'SCRUBBERS', 'OUTFLOW'],
     mix: [['creeper', 4], ['thornbeast', 2], ['stalker', 2], ['sporeling', 2]] },
