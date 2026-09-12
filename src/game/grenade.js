@@ -6,40 +6,35 @@ import * as THREE from 'three';
    costs: almost every death is a surround that kills you in about two seconds,
    with nothing to press. The grenade is that button.
 
-   Grenades are bought at the Armory on the floor where you'll use them (in the
-   pit, between waves), and at most two can be thrown per floor. You pick the
-   spot: drag from the button (or aim with the mouse), with time slowed while
-   you do. A quick double-press throws at the thickest crowd instead. */
+   Buy as many as you can afford at the Armory; the pouch holds two. You pick
+   the spot: drag from the button (or aim with the mouse), with time slowed
+   while you do. A quick double-press throws at the thickest crowd instead. */
 
 export const BLAST_R = 4.2;          // metres
 export const THROW_RANGE = 10;
-export const GRENADES_PER_FLOOR = 2;
-export const GRENADE_PRICE = 80;     // coins, each
+export const CARRY_CAP = 2;          // how many fit in the pouch at once
+export const GRENADE_PRICE = 150;    // coins, each — the real limit is your wallet
 const FLIGHT = 0.55;                 // seconds in the air
 const FUSE = 0.22;                   // seconds lying on the floor, blinking
 const ARC_DOTS = 14;
 
-/* The per-floor rules, kept apart from the rendering so they can be tested.
+/* What limits grenades is the pouch and your wallet, not a quota.
 
-     - Bought on the floor: you can stock at most two, and never more than the
-       throws you have left this floor (so you can't buy a grenade you can't use).
-     - Two throws per floor attempt.
-     - Unused grenades carry over if you die and retry the SAME floor — losing
-       coins you just spent to one bad death would feel like a punishment — and
-       are lost when you move to a new floor (or a new wave in the pit). */
+   The old rule — two per floor, bought on that floor — meant that on a floor
+   that was going badly, the one thing that could save you was switched off and
+   no amount of coins could turn it back on. Now you can buy as many as you can
+   afford; you just cannot carry more than two at a time. Running dry mid-fight
+   costs you a walk back to the Armory pad and two seconds standing still on it,
+   which is a real price in the middle of a room, and the coins are a real price
+   everywhere else. */
 export class NadeStock {
-  constructor(){ this.stock = 0; this.uses = 0; this.floorKey = null; }
-  /** A floor (or wave) starts. Same key = a retry: unused stock is kept. */
-  enterFloor(key){
-    if (key !== this.floorKey){ this.stock = 0; this.floorKey = key; }
-    this.uses = 0;
-  }
-  reset(){ this.stock = 0; this.uses = 0; this.floorKey = null; }
-  get canBuy(){ return this.stock + this.uses < GRENADES_PER_FLOOR; }
-  buy(){ if (!this.canBuy) return false; this.stock++; return true; }
-  get canThrow(){ return this.stock > 0 && this.uses < GRENADES_PER_FLOOR; }
-  use(){ if (!this.canThrow) return false; this.stock--; this.uses++; return true; }
-  get left(){ return GRENADES_PER_FLOOR - this.uses; }
+  constructor(){ this.stock = 0; this.everBought = false; }
+  reset(){ this.stock = 0; this.everBought = false; }   // a new run, not a new floor
+  get canBuy(){ return this.stock < CARRY_CAP; }
+  buy(){ if (!this.canBuy) return false; this.stock++; this.everBought = true; return true; }
+  get canThrow(){ return this.stock > 0; }
+  use(){ if (!this.canThrow) return false; this.stock--; return true; }
+  get room(){ return CARRY_CAP - this.stock; }          // how many more will fit
 }
 
 /**

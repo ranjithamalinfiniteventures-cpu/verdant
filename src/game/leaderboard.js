@@ -37,6 +37,10 @@ const BOARDS = {
              sort: (a, b) => a.seconds - b.seconds },
   endless: { key: 'verdant.leaderboard.endless.v1',
              sort: (a, b) => (b.wave - a.wave) || (b.kills - a.kills) || (a.seconds - b.seconds) },
+  // Different hazards make these scores incomparable with Heartwood. Keep a
+  // dedicated device board until the hosted database supports this arena.
+  eclipse: { key: 'verdant.leaderboard.eclipse.v1', localOnly: true,
+             sort: (a, b) => (b.wave - a.wave) || (b.kills - a.kills) || (a.seconds - b.seconds) },
 };
 
 const clean = (s) => String(s || '').toUpperCase().replace(/[^A-Z0-9 _-]/g, '').trim().slice(0, 12);
@@ -81,7 +85,7 @@ class RemoteBackend {
 class Backend {
   constructor(board){
     this.local = new LocalBackend(board);
-    this.remote = REMOTE_URL ? new RemoteBackend(REMOTE_URL, board) : null;
+    this.remote = REMOTE_URL && !BOARDS[board].localOnly ? new RemoteBackend(REMOTE_URL, board) : null;
   }
   down(e){
     remoteDownUntil = Date.now() + 60e3;
@@ -107,6 +111,23 @@ const backendFor = (board) => new Backend(board);
 async function safeTop(backend, limit){
   try { return await backend.top(limit); }
   catch (e){ console.warn('[verdant] leaderboard unavailable:', e.message); return null; }
+}
+
+function waveBoard(board){
+  return {
+    backend: backendFor(board),
+    get shared(){ return !!this.backend.remote && remoteUp(); },
+    async top(limit = 10){ return safeTop(this.backend, limit); },
+    async submit({ name, wave, kills, seconds, assisted = false }){
+      if (assisted || !Number.isFinite(wave) || wave < 1) return null;
+      const entry = {
+        name: leaderboard.setName(name), wave: wave | 0, kills: kills | 0,
+        seconds: Math.round((seconds || 0) * 100) / 100, at: Date.now(),
+      };
+      try { return { rows: await this.backend.submit(entry), entry }; }
+      catch (e){ console.warn('[verdant] could not submit:', e.message); return { rows: null, entry }; }
+    },
+  };
 }
 
 export const leaderboard = {
@@ -138,19 +159,8 @@ export const leaderboard = {
   },
 
   /** The Heartwood Pit: the deepest wave reached. */
-  endless: {
-    backend: backendFor('endless'),
-    async top(limit = 10){ return safeTop(this.backend, limit); },
-    async submit({ name, wave, kills, seconds, assisted = false }){
-      if (assisted || !Number.isFinite(wave) || wave < 1) return null;
-      const entry = {
-        name: leaderboard.setName(name), wave: wave | 0, kills: kills | 0,
-        seconds: Math.round((seconds || 0) * 100) / 100, at: Date.now(),
-      };
-      try { return { rows: await this.backend.submit(entry), entry }; }
-      catch (e){ console.warn('[verdant] could not submit:', e.message); return { rows: null, entry }; }
-    },
-  },
+  endless: waveBoard('endless'),
+  eclipse: waveBoard('eclipse'),
 
   format(sec){
     const m = Math.floor(sec / 60), s = Math.floor(sec % 60);

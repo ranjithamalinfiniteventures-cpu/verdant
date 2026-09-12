@@ -2,7 +2,7 @@ import { gunIllustration } from './gun-designs.js';
 import { GUNS } from './weapons.js';
 import { PERKS } from './vault.js';
 import { audio } from '../core/audio.js';
-import { GRENADE_PRICE, GRENADES_PER_FLOOR } from './grenade.js';
+import { GRENADE_PRICE, CARRY_CAP } from './grenade.js';
 import { storage } from '../core/platform.js';
 
 const KEY = 'verdant.armory.v1';
@@ -130,26 +130,24 @@ export class Armory {
       </article>
       ${this.renderGrenade()}`;
   }
-  /* Grenades are bought for the floor you're on: at most two thrown per floor,
-     and whatever you haven't thrown is gone when you move on (the pit resets
-     the throws every wave instead, and lets unthrown ones ride along). */
+  /* Buy as many as you can afford; the pouch holds two. Coming back for more
+     mid-floor costs a walk to the pad and two seconds standing still on it. */
   renderGrenade(){
     const n = this.nades;
     if (!n) return '';
-    const pit = n.floorKey === 'pit';
-    const where = pit ? 'WAVE' : 'FLOOR';
-    const capped = !n.canBuy;
+    const full = !n.canBuy;
+    const poor = this.coins < GRENADE_PRICE;
     return `
       <article class="medbay-card ordnance ${n.stock ? 'owned' : ''}">
         <div class="medbay-info">
           <h3>FRAG GRENADE</h3>
-          <small>IN POUCH ${n.stock} · THROWN ${n.uses} / ${GRENADES_PER_FLOOR} THIS ${where}</small>
-          <p>${pit ? 'Two throws a wave. Unthrown grenades stay with you between waves.'
-            : 'For this floor only — two throws at most, and unthrown ones are left behind when you move on.'}
-            Drag from the grenade button to aim${matchMedia('(pointer:fine)').matches ? ' (or hold G and point)' : ''}.</p>
+          <small>POUCH ${n.stock} / ${CARRY_CAP} · ${GRENADE_PRICE} COINS EACH</small>
+          <p>${full
+            ? 'The pouch is full. Throw one and come back for another — the Armory restocks as often as you can pay.'
+            : 'Buy as many as you can afford across a run; you carry two at a time. Tap the grenade button, then tap where it should land.'}</p>
         </div>
-        <button data-grenade="buy" ${capped || this.coins < GRENADE_PRICE ? 'disabled' : ''}>
-          ${capped ? `${where === 'WAVE' ? 'Wave' : 'Floor'} limit reached` : `Buy 1 · ${GRENADE_PRICE} coins`}
+        <button data-grenade="buy" ${full || poor ? 'disabled' : ''}>
+          ${full ? 'Pouch full' : poor ? `Need ${GRENADE_PRICE} coins` : `Buy 1 · ${GRENADE_PRICE} coins`}
         </button>
       </article>`;
   }
@@ -159,8 +157,8 @@ export class Armory {
     this.coins -= GRENADE_PRICE;
     n.buy();
     this.status.textContent = n.canBuy
-      ? `Frag grenade in the pouch (${n.stock}). You can carry one more this ${n.floorKey === 'pit' ? 'wave' : 'floor'}.`
-      : `Frag grenade in the pouch (${n.stock}). That's the limit for this ${n.floorKey === 'pit' ? 'wave' : 'floor'}.`;
+      ? `Grenade stowed — ${n.stock} in the pouch, room for one more.`
+      : `Grenade stowed — pouch full at ${n.stock}.`;
     audio.confirm();
     this.render();
     this.save();

@@ -45,6 +45,10 @@ export function buildLighting(scene, w = 22, d = 15){
       hemi: [0xb7a4ff, 0x4a1238, 0.62], key: [0xffd2a0, 1.55], rim: [0x5eead4, 0.85],
       fill: [0xff5db1, 11, 26, [0, 6, 0]], bg: 0x07040c, fog: [0x07040c, 38, 88],
     },
+    eclipse: {
+      hemi: [0xbedcf6, 0x1d394d, 0.85], key: [0xffdeaa, 1.8], rim: [0x5ae7ff, 1.05],
+      fill: [0xffb956, 10, 28, [0, 7, -3]], bg: 0x030912, fog: [0x030912, 64, 145],
+    },
   };
   out.mood = (name) => {
     const m = MOODS[name] || MOODS.tower;

@@ -191,16 +191,17 @@ export class Hud {
   /* ------------------------------------------------ the endless pit -- */
 
   /** Switch the HUD between the tower and the pit. */
-  setEndlessMode(on){
+  setEndlessMode(on, arenaId = 'endless'){
     this.el.hud.classList.toggle('endless', !!on);
+    this.el.hud.classList.toggle('eclipse', !!on && arenaId === 'eclipse');
     this._endlessKey = null;
   }
 
   /** The wave readout that stands in for the floor header in the pit. */
-  setEndless({ wave, left, total, best, breather, timer }){
+  setEndless({ wave, left, total, best, breather, timer, name = 'HEARTWOOD PIT' }){
     const label = breather
       ? (wave ? `WAVE ${wave} CLEARED · NEXT IN ${Math.max(1, Math.ceil(timer))}` : `FIRST WAVE IN ${Math.max(1, Math.ceil(timer))}`)
-      : `HEARTWOOD PIT · WAVE ${wave}`;
+      : `${name} · WAVE ${wave}`;
     const rem = breather ? `BEST WAVE&nbsp;&nbsp;${best}` : `GROWTH LEFT&nbsp;&nbsp;${left}&nbsp;&nbsp;·&nbsp;&nbsp;BEST&nbsp;&nbsp;${best}`;
     const key = label + '|' + rem;
     if (key !== this._endlessKey){
@@ -212,16 +213,17 @@ export class Hud {
   }
 
   /** The big centred call-out when a wave starts. */
-  waveBanner(spec){
+  waveBanner(spec, arenaId = 'endless'){
     const el = document.getElementById('wave-banner');
     if (!el) return;
     const NAMES = { sporeling: 'SPORELINGS', stalker: 'STALKERS', seeder: 'SEEDERS', thornbeast: 'THORNBEASTS', bloomer: 'BLOOMERS' };
     el.classList.toggle('boss', !!spec.boss);
-    document.getElementById('wb-eyebrow').textContent = spec.boss ? 'THE PIT STIRS' : spec.surge ? 'SURGE' : 'INCOMING';
+    const eclipse = arenaId === 'eclipse';
+    document.getElementById('wb-eyebrow').textContent = spec.boss ? (eclipse ? 'REACTOR BREACH' : 'THE PIT STIRS') : spec.surge ? 'SURGE' : 'INCOMING';
     document.getElementById('wb-title').textContent = `WAVE ${spec.n}`;
     document.getElementById('wb-sub').textContent = spec.boss ? 'HEARTROOT RISES'
       : spec.surge ? 'ELITES INBOUND'
-      : spec.debut && NAMES[spec.debut] ? `${NAMES[spec.debut]} JOIN THE PIT` : '';
+      : spec.debut && NAMES[spec.debut] ? `${NAMES[spec.debut]} ${eclipse ? 'BREACH THE FOUNDRY' : 'JOIN THE PIT'}` : '';
     el.hidden = false;
     requestAnimationFrame(() => el.classList.add('on'));
     clearTimeout(this._wbT);
@@ -246,12 +248,14 @@ export class Hud {
   /* The pit's board: deepest wave first, ties to more kills. */
   /** `rows` skips the re-fetch: after a submit we already hold the fresh board,
       and re-reading can return a cached one without the run just posted. */
-  async renderEndlessBoard(mine, rows){
+  async renderEndlessBoard(mine, rows, arenaId = 'endless'){
     const list = document.getElementById('eo-list');
     if (!list) return;
-    rows = rows || await leaderboard.endless.top(8);
+    const board = leaderboard[arenaId];
+    rows = rows || await board.top(8);
+    if (this._overArena !== arenaId) return;
     // after the fetch: `shared` only knows the server is there once it has answered
-    document.getElementById('eo-scope').textContent = leaderboard.shared ? 'GLOBAL' : 'THIS DEVICE';
+    document.getElementById('eo-scope').textContent = board.shared ? 'GLOBAL' : 'THIS DEVICE';
     list.textContent = '';
     if (!rows || !rows.length){
       const li = document.createElement('li');
@@ -273,6 +277,9 @@ export class Hud {
 
   showEndlessOver(stats, onAgain, onTower){
     const $$ = id => document.getElementById(id);
+    const arenaId = stats.arenaId === 'eclipse' ? 'eclipse' : 'endless';
+    this._overArena = arenaId;
+    document.querySelector('.eo-eyebrow').textContent = arenaId === 'eclipse' ? 'ECLIPSE FOUNDRY' : 'HEARTWOOD PIT';
     $$('eo-wave').textContent = stats.wave;
     const best = $$('eo-best');
     best.textContent = stats.newBest ? `NEW BEST · WAVE ${stats.best}` : `BEST WAVE ${stats.best}`;
@@ -293,18 +300,25 @@ export class Hud {
       if (!eligible || submit.disabled) return;
       submit.disabled = true;
       submit.textContent = 'SUBMITTED';
-      const res = await leaderboard.endless.submit({ name: name.value, wave: stats.wave, kills: stats.kills,
+      const res = await leaderboard[arenaId].submit({ name: name.value, wave: stats.wave, kills: stats.kills,
         seconds: stats.seconds, assisted: stats.assisted });
-      await this.renderEndlessBoard(res && res.entry, res && res.rows);
+      await this.renderEndlessBoard(res && res.entry, res && res.rows, arenaId);
     };
-    this.renderEndlessBoard(null);
+    this.renderEndlessBoard(null, null, arenaId);
     $$('eo-again').onclick = () => { this.hideEndlessOver(); onAgain(); };
     $$('eo-tower').onclick = () => { this.hideEndlessOver(); onTower(); };
-    $$('endless-over').classList.add('on');
+    const over = $$('endless-over');
+    over.hidden = false;
+    over.classList.add('on');
     setTimeout(() => $$('eo-again').focus(), 60);
   }
 
-  hideEndlessOver(){ document.getElementById('endless-over')?.classList.remove('on'); }
+  hideEndlessOver(){
+    const over = document.getElementById('endless-over');
+    if (!over) return;
+    over.classList.remove('on');
+    over.hidden = true;
+  }
 
   /** Second Wind charges left this run; the row hides when the perk isn't owned. */
   setRevives(n){
@@ -467,9 +481,16 @@ export class Hud {
 
     const btn = $$('rs-again');
     btn.onclick = () => { this.hideResults(); onAgain(); };
-    document.getElementById('results').classList.add('on');
+    const results = document.getElementById('results');
+    results.hidden = false;
+    results.classList.add('on');
   }
-  hideResults(){ document.getElementById('results').classList.remove('on'); }
+  hideResults(){
+    const results = document.getElementById('results');
+    if (!results) return;
+    results.classList.remove('on');
+    results.hidden = true;
+  }
 
   setDead(on){ this.el.dead.classList.toggle('on', on); }
 

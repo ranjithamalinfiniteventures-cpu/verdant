@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 const store = new Map();
 globalThis.localStorage = { getItem: k => store.get(k) ?? null, setItem: (k, v) => store.set(k, String(v)) };
 
-const { blastCenter, NadeStock, BLAST_R, THROW_RANGE, GRENADES_PER_FLOOR } = await import('../src/game/grenade.js');
+const { blastCenter, NadeStock, BLAST_R, THROW_RANGE, CARRY_CAP, GRENADE_PRICE } = await import('../src/game/grenade.js');
 const { leaderboard } = await import('../src/game/leaderboard.js');
 
 const e = (x, z, hp = 3, alive = true) => ({ alive, pos: { x, z }, def: { hp } });
@@ -34,34 +34,35 @@ assert.equal(blastCenter([e(2, 2, 3, false)], me), null, 'the dead are ignored')
   const caught = list.filter(o => Math.hypot(o.pos.x - t.x, o.pos.z - t.z) <= BLAST_R);
   assert.ok(caught.length >= t.count, 'the count it reports is really inside the radius');
 }
-assert.equal(GRENADES_PER_FLOOR, 2, 'two throws per floor');
+assert.equal(CARRY_CAP, 2, 'the pouch holds two');
+assert.equal(GRENADE_PRICE, 150, 'and each one is a real purchase');
 
-// --- bought per floor, two throws per floor ------------------------------------
+// --- the pouch, not a quota -----------------------------------------------------
+/* The limit is what you can carry and what you can pay, never a per-floor
+   allowance: on a floor that is going badly the one tool that can save you must
+   not be switched off. */
 {
   const n = new NadeStock();
-  n.enterFloor(3);
   assert.ok(!n.canThrow, 'nothing to throw until you buy');
-  assert.ok(n.buy() && n.buy(), 'two can be bought');
-  assert.ok(!n.buy(), 'a third cannot — the floor only allows two');
-  assert.ok(n.use() && !n.buy(), 'one thrown, one in the pouch: still no room to buy');
-  assert.ok(n.use() && !n.canThrow && !n.use(), 'two thrown: done for the floor');
-  assert.ok(!n.canBuy, 'and none can be bought after two throws');
+  assert.ok(n.buy() && n.buy(), 'two fit in the pouch');
+  assert.ok(!n.buy(), 'a third does not');
+  assert.equal(n.room, 0, 'no room left');
 
-  n.enterFloor(3);                     // died, retrying the same floor
-  assert.equal(n.uses, 0, 'a retry gives the throws back');
-  n.buy();
-  n.enterFloor(3);
-  assert.equal(n.stock, 1, 'unthrown grenades survive a retry of the same floor');
-  n.enterFloor(4);
-  assert.equal(n.stock, 0, 'a new floor empties the pouch — buy again');
+  assert.ok(n.use(), 'throw one');
+  assert.equal(n.room, 1, 'which makes room for one more');
+  assert.ok(n.buy(), 'and you may buy it right away — no floor quota');
+  assert.ok(!n.buy(), 'still capped at two');
 
-  n.enterFloor('pit'); n.buy(); n.buy(); n.use(); n.use();
-  assert.ok(!n.canThrow, 'two per wave in the pit');
-  n.buy(); assert.equal(n.stock, 0, 'no buying past the wave limit either');
-  n.enterFloor('pit');                 // next wave
-  assert.ok(n.canBuy && n.uses === 0, 'a new wave resets the throws');
+  // as many as the wallet allows, across a long run
+  let bought = 2;
+  for (let i = 0; i < 20; i++){ if (n.use() && n.buy()) bought++; }
+  assert.ok(bought > 10, `a run can get through many grenades (got ${bought})`);
+
+  // floors do not touch the pouch; only a new run does
   n.reset();
-  assert.equal(n.stock + n.uses, 0, 'a new run starts empty');
+  assert.equal(n.stock, 0, 'a new run starts empty');
+  assert.equal(n.everBought, false, 'and forgets you ever had one');
+  assert.ok(!n.use(), 'an empty pouch throws nothing');
 }
 
 // --- the pit's leaderboard -----------------------------------------------------
@@ -83,4 +84,4 @@ assert.deepEqual(await leaderboard.top(), [], 'the tower board is not polluted b
 assert.equal(await leaderboard.submit({ name: 'z', seconds: 900, kills: 1, coins: 1, floors: 12 }), null,
   'an unfinished tower is still not a time');
 
-console.log('PASS: grenade targeting (packs, elites, reach, the dead), per-floor buying + 2-throw cap, pit leaderboard ranking + rules, boards kept separate');
+console.log('PASS: grenade targeting (packs, elites, reach, the dead), pouch cap of two with unlimited buying, pit leaderboard ranking + rules, boards kept separate');

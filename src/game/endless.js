@@ -47,10 +47,11 @@ export function waveSpec(n){
 }
 
 export class Endless {
-  constructor(storage = globalThis.localStorage){
+  constructor(storage = globalThis.localStorage, key = ENDLESS_KEY){
     this.storage = storage;
+    this.key = key;
     this.best = 0;
-    try { this.best = Math.max(0, JSON.parse(storage?.getItem(ENDLESS_KEY) || '{}').best | 0); } catch {}
+    try { this.best = Math.max(0, JSON.parse(storage?.getItem(this.key) || '{}').best | 0); } catch {}
     this.reset();
   }
 
@@ -104,7 +105,7 @@ export class Endless {
   saveBest(wave){
     if (wave <= this.best) return false;
     this.best = wave;
-    try { this.storage?.setItem(ENDLESS_KEY, JSON.stringify({ best: wave })); } catch {}
+    try { this.storage?.setItem(this.key, JSON.stringify({ best: wave })); } catch {}
     return true;
   }
 }

@@ -48,7 +48,8 @@ export class Story {
     addEventListener('keydown', e => {
       if (!this.active || e.repeat) return;
       if (['Enter', 'Space', 'ArrowRight'].includes(e.code)){ e.preventDefault(); this.next(); }
-      if (e.code === 'Escape'){ e.preventDefault(); this.finish(); }
+      // Escape must remain available for the platform's fullscreen exit.
+      if (e.code === 'Escape') this.finish();
     });
 
     /* The intro no longer plays itself. Portals require a new player to land in

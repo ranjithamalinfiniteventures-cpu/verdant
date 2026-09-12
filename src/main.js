@@ -143,7 +143,7 @@ const fx      = new Fx(engine.scene);
 const guide   = new ExitGuide(engine.scene);
 const grenades = new Grenades(engine.scene);
 const nades = new NadeStock();
-const aim = { on: false, mode: null, pointerId: null, pointer: null, from: null, moved: false, t: 0, mouse: false };
+const aim = { on: false, pointer: null, t: 0, mouse: false };   // armed, and where you last pointed
 let mouse = null;                                     // last mouse position, desktop only
 const boss    = new Boss(engine.scene);
 const player  = new Player(engine.scene);
@@ -190,7 +190,8 @@ function applyPerks(newFloor){
   /* Grenades belong to the floor: a new floor empties the pouch, a retry of
      the same floor keeps what you bought, and both reset the two throws. The
      pit is one long 'floor' whose throws reset every wave (onWaveClear). */
-  if (newFloor){ nades.enterFloor(state.mode === 'endless' ? 'pit' : state.module); grenades.clear(); cancelAim(); }
+  // grenades you paid for stay with you between floors; only a new run clears them
+  if (newFloor){ grenades.clear(); cancelAim(); }
   updateNadeHud();
 }
 document.getElementById('story-replay').addEventListener('click', e => {
@@ -370,19 +371,14 @@ function startModule(i){
 }
 
 /* ------------------------------------------------------------ grenades --
-   Bought at the Armory for the floor you are on, two throws per floor at
-   most (see NadeStock). You choose where it lands:
-     - phone: drag from the orange button and let go on the spot; or tap the
-       button, then tap the floor. Tapping the button a second time throws at
-       the thickest crowd. Dragging back onto the button cancels.
-     - desktop: hold G (or Space) — the ring follows the mouse — and let go.
-   While aiming, time runs at 30% for a few seconds so a phone player can aim
-   in the middle of a surround. */
+   Bought at the Armory: as many as you can afford, two in the pouch at a time
+   (see NadeStock). Press the button (or G) to take one out, then press where
+   it should land. While it is out, time runs at 30% for a couple of seconds,
+   so aiming in the middle of a surround is possible on a phone. */
 function updateNadeHud(){
   const btn = document.getElementById('nade-btn');
   if (!btn) return;
-  // shown once you've bought some this floor; stays (greyed) after the last throw
-  btn.hidden = !(nades.stock > 0 || nades.uses > 0);
+  btn.hidden = !nades.everBought;          // stays visible (greyed) once you own one
   document.getElementById('nade-count').textContent = nades.stock;
   btn.classList.toggle('empty', !nades.canThrow);
   btn.classList.toggle('aiming', aim.on);
@@ -423,27 +419,32 @@ function autoTarget(){
     { x: player.pos.x + Math.sin(player.facing) * 6, z: player.pos.z + Math.cos(player.facing) * 6 };
 }
 function aimPoint(){
+  // the ring follows the mouse on a desktop; on a touch screen it sits on the
+  // thickest crowd until a finger says otherwise
   const p = aim.pointer ? groundAt(aim.pointer.x, aim.pointer.y)
-    : (aim.mode === 'key' || aim.mouse) && mouse ? groundAt(mouse.x, mouse.y) : null;
+    : mouse ? groundAt(mouse.x, mouse.y) : null;
   return clampThrow(p || autoTarget());
 }
-function startAim(mode, pointerId = null, from = null, isMouse = false){
+/** Take the grenade out. One press arms it; the next press on the floor throws. */
+function startAim(){
   if (aim.on || !canThrowNow()) return false;
-  Object.assign(aim, { on: true, mode, pointerId, pointer: null, from, moved: false, t: 0, mouse: isMouse });
+  Object.assign(aim, { on: true, pointer: null, t: 0 });
   audio.tap?.();
   updateNadeHud();
   return true;
 }
+/** Arm it, or put it away if it is already out. */
+function toggleAim(){ if (aim.on){ cancelAim(); return true; } return startAim(); }
 function cancelAim(){
   if (!aim.on) return;
-  aim.on = false; aim.pointerId = null;
+  aim.on = false; aim.pointer = null;
   grenades.hideAim();
   updateNadeHud();
 }
 function releaseAim(to = aimPoint()){
   cancelAim();
   if (!canThrowNow() || !nades.use()) return false;
-  if (!grenades.throw(player.pos, to)){ nades.stock++; nades.uses--; return false; }
+  if (!grenades.throw(player.pos, to)){ nades.stock++; return false; }   // a throw that never left
   audio.toss();
   updateNadeHud();
   return true;
@@ -464,37 +465,24 @@ function aimSlow(raw){
 // the old name, kept for the test harness: throw straight at the crowd
 function throwGrenade(){ return canThrowNow() ? releaseAim(clampThrow(autoTarget())) : false; }
 
+/* Arming and throwing, identical on a phone and a desktop: press the grenade
+   button once to take it out, then press where it should land. Pressing the
+   button again puts it away. A held drag was the old way and it was worse — on
+   a phone your finger covered the target, and nobody expects to hold a key to
+   aim a thrown weapon. */
 {
   const btn = document.getElementById('nade-btn');
-  const overBtn = e => { const r = btn.getBoundingClientRect(); return e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom; };
   btn?.addEventListener('pointerdown', e => {
     e.preventDefault(); e.stopPropagation();
     audio.init();
-    // second tap while waiting for a target: throw at the crowd
-    if (aim.on && aim.mode === 'tap'){ releaseAim(clampThrow(autoTarget())); return; }
-    if (!startAim('drag', e.pointerId, { x: e.clientX, y: e.clientY }, e.pointerType === 'mouse')) return;
-    try { btn.setPointerCapture(e.pointerId); } catch {}
+    toggleAim();
   });
-  btn?.addEventListener('pointermove', e => {
-    if (!aim.on || aim.mode !== 'drag' || e.pointerId !== aim.pointerId) return;
-    if (!aim.moved && Math.hypot(e.clientX - aim.from.x, e.clientY - aim.from.y) < 18) return;
-    aim.moved = true;
-    // the ring sits a little above the finger so the finger doesn't hide it
-    aim.pointer = { x: e.clientX, y: e.clientY - (e.pointerType === 'mouse' ? 0 : 36) };
-  });
-  const up = e => {
-    if (!aim.on || aim.mode !== 'drag' || e.pointerId !== aim.pointerId) return;
-    if (!aim.moved){ aim.mode = 'tap'; aim.pointerId = null; return; }   // a tap: now pick the spot
-    if (overBtn(e) || e.type === 'pointercancel'){ cancelAim(); return; } // dragged back home: cancel
-    releaseAim();
-  };
-  btn?.addEventListener('pointerup', up);
-  btn?.addEventListener('pointercancel', up);
   btn?.addEventListener('click', e => e.stopPropagation());
-  // in tap mode the next tap on the floor is the target — it must not become
-  // the movement stick, so catch it before the canvas does
+
+  // the press that picks the spot must not also grab the movement stick, so it
+  // is caught on the way down, before the canvas sees it
   addEventListener('pointerdown', e => {
-    if (!aim.on || aim.mode !== 'tap' || e.target !== engine.renderer.domElement) return;
+    if (!aim.on || e.target !== engine.renderer.domElement) return;
     e.stopImmediatePropagation(); e.preventDefault();
     aim.pointer = { x: e.clientX, y: e.clientY };
     releaseAim();
@@ -682,7 +670,6 @@ function onWaveClear(){
   room.pulse();
   room.ventsOn = false;
   room.resetVents();
-  nades.enterFloor('pit');                 // two fresh throws for the next wave
   updateNadeHud();
   if (endless.upgradeDue) state.upgradeIn = { t: 1.1, unlock: () => {} };
 }
@@ -1393,17 +1380,15 @@ function tick(raw, render = true){
   if (render) engine.render(t, raw);
 }
 
-addEventListener('keyup', e => {
-  if ((e.code === 'KeyG' || e.code === 'Space') && aim.on && aim.mode === 'key') releaseAim();
-});
 addEventListener('keydown', e => {
   if (!isTypingTarget(e) && ['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code)) e.preventDefault();
   if (isTypingTarget(e)) return;
   if (e.code === 'KeyB' && !e.repeat){ armory.paused ? armory.close() : armory.hintStore(); }
   if (e.code === 'KeyM') hud.setMuted(!audio.toggle());
   if (e.code === 'KeyZ' && !e.repeat){ zones.paused ? zones.close() : openZones(); }
-  if (e.code === 'KeyG' || e.code === 'Space'){
-    if (aim.on || startAim('key')) e.preventDefault();
+  // G takes the grenade out and puts it away; the click on the floor throws it
+  if ((e.code === 'KeyG' || e.code === 'Space') && !e.repeat){
+    if (toggleAim()) e.preventDefault();
   }
   // Escape is reserved by CrazyGames for leaving fullscreen. Cancel our local
   // aim too, but let the browser/platform keep its default action.

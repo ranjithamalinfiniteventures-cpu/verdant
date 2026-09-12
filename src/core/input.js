@@ -13,6 +13,7 @@ export class Input {
 
     addEventListener('keydown', e => {
       if (e.repeat) return;
+      if (e.target?.matches?.('input,textarea,select,[contenteditable="true"]')) return;
       audio.init();
       this.keys.add(e.code); this.used = true;
     });

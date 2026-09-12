@@ -173,11 +173,18 @@ export class Engine {
   /** Follow a target with soft lag + look-ahead in the movement direction. */
   follow(pos, vel, dt){
     this.camLook.copy(pos).addScaledVector(vel, 0.34);
+    if (this.arenaView){
+      // The Foundry's distant eclipse needs a shallower, wider composition.
+      // Still follow movement, keeping the pilot readable on narrow screens.
+      this.camLook.multiplyScalar(0.55);
+      this.camLook.z -= 4;
+    }
     this.camLook.y = 0;
     this.camLook.x = THREE.MathUtils.clamp(this.camLook.x, -this.clampX, this.clampX);
     this.camLook.z = THREE.MathUtils.clamp(this.camLook.z, -this.clampZ, this.clampZ);
     this.camTarget.lerp(this.camLook, 1 - Math.pow(0.0016, dt));
     this._off.copy(this.camOffset).multiplyScalar(this.zoom * this.roomZoom);
+    if (this.arenaView) this._off.set(0, 23, 29).multiplyScalar(Math.max(2.05, this.zoom * 1.45));
     this.camera.position.copy(this.camTarget).add(this._off);
     this.camera.lookAt(this.camTarget.x, this.camTarget.y + 1.1, this.camTarget.z);
 
@@ -193,6 +200,7 @@ export class Engine {
   /** Dolly back so the room you are standing in fits the frame. `clampW/D` are
       the whole floor, which is what the camera is allowed to travel across. */
   fitRoom(w, d, clampW = w, clampD = d){
+    this.arenaView = false;
     this.roomZoom = THREE.MathUtils.clamp(Math.max(w / 34, d / 24), 1, 1.15);
 
     /* Follow the player anywhere on the floor. The previous clamp held the

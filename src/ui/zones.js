@@ -19,25 +19,31 @@ export class Zones {
       if (e.target === this.el) this.close();          // tap outside the panel
     });
     addEventListener('keydown', e => {
-      if (this.paused && e.key === 'Escape'){ e.preventDefault(); this.close(); }
+      // Escape must remain available for the platform's fullscreen exit.
+      if (this.paused && e.key === 'Escape') this.close();
     });
   }
 
   get paused(){ return !this.el.hidden; }
 
-  /** @param {{mode:string, towerFloor:number, best:number}} info */
-  open({ mode, towerFloor, best }){
+  /** @param {{mode:string, towerFloor:number, best:number, eclipseBest:number}} info */
+  open({ mode, towerFloor, best, eclipseBest = 0 }){
     const towerCard = this.el.querySelector('.zone-card.tower');
     const pitCard = this.el.querySelector('.zone-card.pit');
+    const eclipseCard = this.el.querySelector('.zone-card.eclipse');
     towerCard.classList.toggle('current', mode === 'tower');
     pitCard.classList.toggle('current', mode === 'endless');
+    eclipseCard.classList.toggle('current', mode === 'eclipse');
     this.el.querySelector('#zc-tower-state').textContent = mode === 'tower'
       ? `YOU ARE HERE · FLOOR ${towerFloor}` : `RESUME FLOOR ${towerFloor}`;
     this.el.querySelector('#zc-pit-state').textContent = mode === 'endless'
       ? (best ? `YOU ARE HERE · BEST WAVE ${best}` : 'YOU ARE HERE') : best ? `BEST WAVE ${best}` : 'NO RUNS YET';
+    this.el.querySelector('#zc-eclipse-state').textContent = mode === 'eclipse'
+      ? (eclipseBest ? `YOU ARE HERE · BEST WAVE ${eclipseBest}` : 'YOU ARE HERE')
+      : eclipseBest ? `BEST WAVE ${eclipseBest}` : 'NEW ZONE · ENTER';
     this.el.querySelector('#zones-note').textContent = mode === 'tower'
-      ? 'Leaving the tower keeps your floor. A tower run that visits the pit is not ranked.'
-      : 'Coins you earn in the pit are yours to spend in the tower.';
+      ? 'Leaving the tower keeps your floor. Visiting an arena makes that tower run unranked.'
+      : 'Arena coins are yours to keep. Changing arenas starts a new wave run; each zone keeps its own best.';
     this.mode = mode;
     this.el.hidden = false;
     audio.init();

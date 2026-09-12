@@ -186,6 +186,7 @@ export class FloorUpgrades {
     // 1/2/3 still select; they are simply no longer labelled on the cards
     addEventListener('keydown', e => {
       if (!this.paused) return;
+      if (e.target?.matches?.('input,textarea,select,[contenteditable="true"]')) return;
       if (e.key === 'r' || e.key === 'R'){ e.preventDefault(); this.reroll(); return; }
       const n = Number(e.key);
       if (n >= 1 && n <= this.offer.length){ e.preventDefault(); this.choose(this.offer[n - 1].id); }
