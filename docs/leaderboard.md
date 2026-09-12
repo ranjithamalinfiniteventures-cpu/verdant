@@ -40,13 +40,19 @@ create index scores_ip_idx    on public.scores (ip_hash, at desc);
 alter table public.scores enable row level security;
 ```
 
-## 2. Give Vercel the keys
+## 2. Connect Supabase to Vercel
 
-Supabase → **Project Settings → API**. Copy the **Project URL** and the
-**`service_role`** key (the secret one, *not* `anon`).
+**The short way.** Vercel → your project → **Integrations** (or the
+Marketplace) → **Supabase** → connect. It creates or links the project and sets
+the environment variables itself; `api/scores.js` accepts the names it uses
+(`SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_URL`, and
+`SUPABASE_SERVICE_ROLE_KEY`), so there is nothing to edit. You still run the
+SQL in step 1 — the integration creates the *project*, not your table.
 
-Vercel → your project → **Settings → Environment Variables**, add both for
-Production and Preview:
+**By hand**, if you'd rather not connect accounts: Supabase → **Project
+Settings → API**, copy the **Project URL** and the **`service_role`** key (the
+secret one, *not* `anon`). Vercel → **Settings → Environment Variables**, add
+both for Production and Preview:
 
 | Name | Value |
 | --- | --- |

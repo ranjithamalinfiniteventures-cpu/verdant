@@ -6,8 +6,9 @@
    variable, and every submission has to get past the plausibility checks below
    before it is written.
 
-   Set up (see docs/leaderboard.md): create the table, then set SUPABASE_URL and
-   SUPABASE_SERVICE_KEY in the Vercel project. Without them this returns 503 and
+   Set up (see docs/leaderboard.md): create the table, then connect Supabase to
+   the Vercel project — either through the marketplace integration or by setting
+   the two variables by hand. Without them this returns 503 and
    the game quietly falls back to a device-local board, so the game is never
    broken by the leaderboard being down.
 
@@ -18,8 +19,11 @@ import { createHash } from 'node:crypto';
 import { FLOORS } from '../src/game/floors.js';
 import { waveSpec } from '../src/game/endless.js';
 
-const URL_BASE = process.env.SUPABASE_URL;
-const KEY = process.env.SUPABASE_SERVICE_KEY;
+/* Two ways to wire this up, and both work without touching the code:
+   connect Supabase from the Vercel marketplace (it injects its own variable
+   names automatically), or paste the URL and service key in by hand. */
+const URL_BASE = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+const KEY = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 const TABLE = 'scores';
 const MAX_PER_HOUR = 30;              // per IP: a human finishes nothing like this many runs
 
