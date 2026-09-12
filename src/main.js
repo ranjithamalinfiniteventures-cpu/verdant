@@ -23,7 +23,7 @@ import { buildArena } from './game/arena.js';
 import { Endless }       from './game/endless.js';
 import { buildEclipse, ECLIPSE_KEY } from './game/eclipse.js';
 import { Zones }         from './ui/zones.js';
-import { Grenades, NadeStock, blastCenter, BLAST_R, THROW_RANGE } from './game/grenade.js';
+import { Grenades, NadeStock, blastCenter, BLAST_R, THROW_RANGE, GRENADE_PRICE } from './game/grenade.js';
 
 // Opt-in local playtest loadout. Normal progression is the default.
 const POWER_TEST = ['localhost', '127.0.0.1', '::1'].includes(location.hostname)
@@ -169,6 +169,7 @@ const storeTutorial = new StoreTutorial(engine.scene, armory);
 const floorUpgrades = new FloorUpgrades({ weapon, player, loot, vault });
 vault.onChange = n => { hud.setCounts({ vault: n }); armory.updateWallet(); };
 // a perk bought mid-floor applies at once; a bought shield only lands next floor
+armory.onBuy = () => { learned('upgrade'); setTimeout(nextLesson, 60); };
 armory.onPerk = id => {
   if (id === 'revive') state.run.revives = Math.max(state.run.revives, 1);   // usable this run, not next
   applyPerks(false);
@@ -209,6 +210,7 @@ const shopCamera = {position:new THREE.Vector3(), rotation:new THREE.Quaternion(
 const shopAim = new THREE.Vector3();
 let shopTime = 0;
 armory.onOpen = station => {
+  setTimeout(nextLesson, 60);            // after the dialog has laid out
   shopCamera.position.copy(engine.camera.position); shopCamera.rotation.copy(engine.camera.quaternion);
   shopCamera.target.set(station.x + 2.4, 3.5, station.z + 7.2);
   shopAim.set(station.x, -.25, station.z - .45); shopTime = 0;
@@ -219,6 +221,8 @@ armory.onOpen = station => {
   document.getElementById('store-progress').hidden = true;
 };
 armory.onClose = () => {
+  hud.clearPoint();
+  setTimeout(nextLesson, 260);           // back in the fight: teach the throw
   if (room.store.label) room.store.label.visible = true;
   engine.camera.position.copy(shopCamera.position); engine.camera.quaternion.copy(shopCamera.rotation);
   document.getElementById('hud').classList.remove('shopping');
@@ -428,7 +432,7 @@ function aimPoint(){
 /** Take the grenade out. One press arms it; the next press on the floor throws. */
 function startAim(){
   if (aim.on || !canThrowNow()) return false;
-  grenadeTaught();
+  learned('throw');
   Object.assign(aim, { on: true, pointer: null, t: 0 });
   audio.tap?.();
   updateNadeHud();
@@ -443,6 +447,7 @@ function cancelAim(){
   updateNadeHud();
 }
 function releaseAim(to = aimPoint()){
+  learned('aim');
   cancelAim();
   if (!canThrowNow() || !nades.use()) return false;
   if (!grenades.throw(player.pos, to)){ nades.stock++; return false; }   // a throw that never left
@@ -519,24 +524,69 @@ function explodeGrenade(at){
 }
 
 armory.nades = nades;
-/* The first grenade a player ever buys is the one moment they will look for
-   instructions, so that is when the hand appears. It goes away the instant they
-   arm one, and never comes back. */
-const GRENADE_TAUGHT = 'verdant.taught.grenade';
-let teachingGrenade = false;
-function teachGrenade(){
-  try { if (storage.getItem(GRENADE_TAUGHT) === '1') return; } catch {}
-  if (!nades.stock) return;
-  updateNadeHud();
-  teachingGrenade = hud.pointAt('nade-btn', 'PRESS, THEN PRESS WHERE IT LANDS', { side: 'left' });
+/* ---------------------------------------------------------------- tutor --
+   A first run teaches four things, each one exactly when the player can act on
+   it, each with a hand on the thing to press:
+
+     upgrade  → in the shop, on the laser's upgrade button
+     buy      → in the shop, on the grenade, once they can afford one
+     throw    → in the fight, on the grenade button
+     aim      → still in the fight, on an actual enemy
+
+   Every step remembers itself, so none of it ever appears twice, and a step
+   whose moment has not arrived simply waits: the grenade lesson does not fire
+   while the player is broke, because a hand pointing at a button they cannot
+   press teaches the wrong thing. */
+const TAUGHT_KEY = 'verdant.taught.v2';
+const taught = (() => {
+  try { return new Set(JSON.parse(storage.getItem(TAUGHT_KEY) || '[]')); } catch { return new Set(); }
+})();
+let teaching = null, lessonCd = 0;
+function learned(step){
+  if (!taught.has(step)){
+    taught.add(step);
+    try { storage.setItem(TAUGHT_KEY, JSON.stringify([...taught])); } catch {}
+  }
+  if (teaching === step){ teaching = null; hud.clearPoint(); }
 }
-function grenadeTaught(){
-  if (!teachingGrenade) return;
-  teachingGrenade = false;
-  hud.clearPoint();
-  try { storage.setItem(GRENADE_TAUGHT, '1'); } catch {}
+function teach(step, target, text, opts){
+  if (taught.has(step) || teaching === step) return false;
+  if (!hud.pointAt(target, text, opts)) return false;
+  teaching = step;
+  return true;
 }
-armory.onGrenade = () => { updateNadeHud(); teachGrenade(); };
+/** Pick the next lesson that fits the moment. Called when the state changes. */
+function nextLesson(){
+  if (state.mode !== 'tower' || state.module !== 0) return;      // floor 1 only
+  if (armory.paused){
+    if (!taught.has('upgrade') && armory.levels.laser === 1 && armory.coins >= armory.cost('laser'))
+      return teach('upgrade', 'button[data-gun="laser"][data-action="upgrade"]', 'TAP TO UPGRADE YOUR LASER');
+    if (taught.has('upgrade') && !taught.has('buy') && armory.coins >= GRENADE_PRICE && nades.canBuy)
+      return teach('buy', 'button[data-grenade]', 'BUY A GRENADE');
+    return;
+  }
+  if (aim.on && !taught.has('aim')) return;                       // handled per frame below
+  if (!taught.has('throw') && nades.stock > 0)
+    return teach('throw', '#nade-btn', 'PRESS HERE — OR PRESS G', { side: 'left' });
+}
+/* While the grenade is out, the hand follows the nearest growth: "that is what
+   you press". It is the only lesson that points into the world rather than at
+   the HUD. */
+function teachAim(){
+  if (taught.has('aim') || !aim.on) return;
+  const foe = enemies.list.find(e => e.alive) || (state.bossFight && boss.alive ? boss : null);
+  if (!foe) return;
+  teach('aim', () => {
+    const v = new THREE.Vector3(foe.pos.x, 0.8, foe.pos.z);
+    const out = new THREE.Vector2();
+    engine.camera.updateMatrixWorld();
+    engine.project(v, out);
+    return { x: out.x, y: out.y };
+  }, 'NOW PRESS AN ENEMY');
+}
+
+armory.nades = nades;
+armory.onGrenade = () => { updateNadeHud(); learned('buy'); nextLesson(); };
 
 /* ------------------------------------------------------ the endless pit --
    A second zone next to the tower: one round arena, waves until you fall.
@@ -1391,6 +1441,12 @@ function tick(raw, render = true){
     fight(dt);
     player.update(dt, dir, room.bounds, room.colliders);
     updateAim();
+    if (aim.on) teachAim();
+    /* Poll for the next lesson rather than relying on the exact order of dialog
+       events: whichever way the player got here, if a lesson is due and nothing
+       is on screen, it appears within half a second. */
+    lessonCd -= raw;
+    if (lessonCd <= 0){ lessonCd = 0.5; if (!teaching && !taught.has('aim')) nextLesson(); }
   } else {
     cancelAim();
     // a speedrun clock that stops between rooms can be gamed by dawdling there

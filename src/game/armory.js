@@ -215,6 +215,7 @@ export class Armory {
     this.status.textContent = action === 'upgrade' ? `${g.name} upgraded to level ${this.levels[id]}.` : `${g.name} equipped.`;
     this.save();
     this.onAction?.({ id, action, level:this.levels[id], coins:this.coins });
+    this.onBuy?.({ id, action });          // the tutorial chain listens for this
     return true;
   }
   /** Guns you own, in the order they appear in the shop. */
@@ -247,7 +248,7 @@ export class Armory {
     this.renderMedbay();
     this.cards.innerHTML = GUNS.map(g => {
       const level = this.levels[g.id] || 0, cost = this.cost(g.id);
-      const tutorialTarget = this.tutorialActive && g.id === 'laser' && level === 1 ? ' tutorial-target' : '';
+      const tutorialTarget = '';   // the hand points at it now — see the tutorial chain in main.js
       return `<article class="gun-card ${this.selected === g.id ? 'equipped' : ''}${tutorialTarget}" style="--gun:#${g.color.toString(16).padStart(6,'0')}">
         <div class="weapon-art">${gunIllustration(g.id, `#${g.color.toString(16)}`)}</div>
         <div class="gun-info"><small class="weapon-number">VD / 0${GUNS.indexOf(g)+1} · ${level ? "OWNED" : "REQUISITION"}</small><h3>${g.name}</h3><p>${g.description}</p><small>${level ? `LEVEL ${level} / 5` : 'LOCKED'} · ${g.fireRate} SHOTS/S · ${(g.damage * (1 + (Math.max(1,level)-1)*0.25)).toFixed(2)} DMG${g.pellets ? ' / PELLET' : ''}</small></div>

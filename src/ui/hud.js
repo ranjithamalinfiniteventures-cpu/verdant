@@ -245,33 +245,66 @@ export class Hud {
     inputEl.classList.add('locked');
   }
 
-  /* Point a hand at a control, with a caption. Survives a resize, and gets out
-     of the way the moment the player does the thing. Nothing else in the HUD
-     is allowed to teach by glowing at you. */
+  /* Point a hand at something, with a caption.
+
+     `target` is a CSS selector, an element, or a function returning screen
+     coordinates — the last one is how it points at an enemy in the world. The
+     selector form is re-resolved every frame, because the shop rebuilds its
+     cards with innerHTML whenever you buy something, which destroys the element
+     the hand was pointing at.
+
+     A <dialog> opened with showModal() lives in the browser's top layer, above
+     everything else on the page, so pointing INSIDE the shop means moving the
+     hand into that dialog or it hides behind it. */
   pointAt(target, text, { side = 'auto' } = {}){
-    const el = typeof target === 'string' ? document.getElementById(target) : target;
     const hint = document.getElementById('tap-hint');
-    if (!el || !hint || el.hidden) return false;
+    if (!hint) return false;
     document.getElementById('tap-hint-text').textContent = text || '';
-    const place = () => {
+    const resolve = () => {
+      if (typeof target === 'function') return target();
+      const el = typeof target === 'string' ? document.querySelector(target) : target;
+      if (!el || el.hidden || el.disabled) return null;
       const r = el.getBoundingClientRect();
-      if (!r.width){ this.clearPoint(); return; }
-      const leftward = side === 'left' || (side === 'auto' && r.left > innerWidth * 0.55);
-      hint.classList.toggle('left', leftward);
-      hint.style.left = Math.round(r.left + r.width * (leftward ? 0.12 : 0.5)) + 'px';
-      hint.style.top = Math.round(r.top + r.height * 0.45) + 'px';
+      if (!r.width) return null;
+      return { x: r.left + r.width * 0.5, y: r.top + r.height * 0.45, el, w: r.width };
     };
-    place();
+    let misses = 0;
+    const place = () => {
+      const at = resolve();
+      /* The shop replaces its cards with innerHTML on every purchase, so the
+         element the hand points at briefly does not exist. Giving up on the
+         first miss made the lesson vanish the moment the player interacted. */
+      if (!at){
+        if (++misses > 30){ this.clearPoint(); return; }
+        this._pointRaf = requestAnimationFrame(place);
+        return;
+      }
+      misses = 0;
+      const host = at.el?.closest?.('dialog[open]') || document.getElementById('hud');
+      if (hint.parentElement !== host) host.appendChild(hint);
+      const leftward = side === 'left' || (side === 'auto' && at.x > innerWidth * 0.55);
+      hint.classList.toggle('left', leftward);
+      /* Measure where left:0/top:0 actually lands, then correct. The shop is a
+         <dialog> with a backdrop filter, which makes it the containing block for
+         position:fixed — so "fixed" coordinates inside it are not viewport
+         coordinates, and the hand landed 341px below the button it meant. This
+         works wherever the hint is parented, without knowing why. */
+      hint.style.left = '0px'; hint.style.top = '0px';
+      const base = hint.getBoundingClientRect();
+      hint.style.left = Math.round(at.x - base.left - (at.w ? at.w * 0.38 : 0)) + 'px';
+      hint.style.top = Math.round(at.y - base.top) + 'px';
+      this._pointRaf = requestAnimationFrame(place);
+    };
     hint.hidden = false;
-    this._pointPlace = place;
-    addEventListener('resize', place);
-    return true;
+    cancelAnimationFrame(this._pointRaf);
+    place();
+    return !hint.hidden;
   }
   clearPoint(){
     const hint = document.getElementById('tap-hint');
-    if (!hint || hint.hidden) return;
-    hint.hidden = true;
-    if (this._pointPlace){ removeEventListener('resize', this._pointPlace); this._pointPlace = null; }
+    cancelAnimationFrame(this._pointRaf);
+    this._pointRaf = 0;
+    if (hint) hint.hidden = true;
   }
 
   /* The pit's board: deepest wave first, ties to more kills. */
