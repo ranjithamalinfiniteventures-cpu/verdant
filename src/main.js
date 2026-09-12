@@ -428,6 +428,7 @@ function aimPoint(){
 /** Take the grenade out. One press arms it; the next press on the floor throws. */
 function startAim(){
   if (aim.on || !canThrowNow()) return false;
+  grenadeTaught();
   Object.assign(aim, { on: true, pointer: null, t: 0 });
   audio.tap?.();
   updateNadeHud();
@@ -518,7 +519,24 @@ function explodeGrenade(at){
 }
 
 armory.nades = nades;
-armory.onGrenade = () => updateNadeHud();
+/* The first grenade a player ever buys is the one moment they will look for
+   instructions, so that is when the hand appears. It goes away the instant they
+   arm one, and never comes back. */
+const GRENADE_TAUGHT = 'verdant.taught.grenade';
+let teachingGrenade = false;
+function teachGrenade(){
+  try { if (storage.getItem(GRENADE_TAUGHT) === '1') return; } catch {}
+  if (!nades.stock) return;
+  updateNadeHud();
+  teachingGrenade = hud.pointAt('nade-btn', 'PRESS, THEN PRESS WHERE IT LANDS', { side: 'left' });
+}
+function grenadeTaught(){
+  if (!teachingGrenade) return;
+  teachingGrenade = false;
+  hud.clearPoint();
+  try { storage.setItem(GRENADE_TAUGHT, '1'); } catch {}
+}
+armory.onGrenade = () => { updateNadeHud(); teachGrenade(); };
 
 /* ------------------------------------------------------ the endless pit --
    A second zone next to the tower: one round arena, waves until you fall.

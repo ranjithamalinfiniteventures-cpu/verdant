@@ -245,6 +245,35 @@ export class Hud {
     inputEl.classList.add('locked');
   }
 
+  /* Point a hand at a control, with a caption. Survives a resize, and gets out
+     of the way the moment the player does the thing. Nothing else in the HUD
+     is allowed to teach by glowing at you. */
+  pointAt(target, text, { side = 'auto' } = {}){
+    const el = typeof target === 'string' ? document.getElementById(target) : target;
+    const hint = document.getElementById('tap-hint');
+    if (!el || !hint || el.hidden) return false;
+    document.getElementById('tap-hint-text').textContent = text || '';
+    const place = () => {
+      const r = el.getBoundingClientRect();
+      if (!r.width){ this.clearPoint(); return; }
+      const leftward = side === 'left' || (side === 'auto' && r.left > innerWidth * 0.55);
+      hint.classList.toggle('left', leftward);
+      hint.style.left = Math.round(r.left + r.width * (leftward ? 0.12 : 0.5)) + 'px';
+      hint.style.top = Math.round(r.top + r.height * 0.45) + 'px';
+    };
+    place();
+    hint.hidden = false;
+    this._pointPlace = place;
+    addEventListener('resize', place);
+    return true;
+  }
+  clearPoint(){
+    const hint = document.getElementById('tap-hint');
+    if (!hint || hint.hidden) return;
+    hint.hidden = true;
+    if (this._pointPlace){ removeEventListener('resize', this._pointPlace); this._pointPlace = null; }
+  }
+
   /* The pit's board: deepest wave first, ties to more kills. */
   /** `rows` skips the re-fetch: after a submit we already hold the fresh board,
       and re-reading can return a cached one without the run just posted. */

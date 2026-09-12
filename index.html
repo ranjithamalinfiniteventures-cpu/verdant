@@ -346,6 +346,17 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
 #results button.ghost{border-color:#c9a6ff;background:rgba(201,166,255,.10);color:#e4d4ff}
 #results button.ghost:hover{background:rgba(201,166,255,.22)}
 
+#tap-hint{position:absolute;z-index:14;pointer-events:none;transform:translate(-18%,-8%)}
+#tap-hint .tap-hand{width:calc(var(--u)*3.6);height:auto;display:block;filter:drop-shadow(0 3px 6px rgba(0,0,0,.65));
+  animation:tapPoke 1.5s ease-in-out infinite}
+#tap-hint .tap-ring{position:absolute;left:calc(var(--u)*.2);top:calc(var(--u)*-.5);width:calc(var(--u)*2.2);height:calc(var(--u)*2.2);
+  border-radius:50%;border:2px solid #ffd9b3;opacity:0;animation:tapRing 1.5s ease-out infinite}
+#tap-hint b{position:absolute;left:calc(var(--u)*4);top:calc(var(--u)*1.1);white-space:nowrap;
+  font:800 calc(var(--u)*.8) var(--f);letter-spacing:.1em;color:#ffe6c9;text-shadow:0 2px 6px #000}
+#tap-hint.left b{left:auto;right:calc(var(--u)*4);text-align:right}
+@keyframes tapPoke{0%,100%{transform:translate(0,0) rotate(0)}45%{transform:translate(-6%,-12%) rotate(-6deg)}}
+@keyframes tapRing{0%{transform:scale(.5);opacity:.9}70%{transform:scale(1.5);opacity:0}100%{opacity:0}}
+
 #dead{position:absolute;inset:0;display:grid;place-content:center;justify-items:center;gap:calc(var(--u)*.8);
   background:radial-gradient(ellipse at 50% 50%,rgba(60,6,6,.55),rgba(3,4,6,.92));
   opacity:0;pointer-events:none;transition:opacity .45s}
@@ -839,6 +850,20 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
         <rect x="19" y="12.5" width="9" height="6.5" rx="2"/></svg>
       </button>
       <div class="wname" id="weapon-name">PRUNING LASER</div>
+    </div>
+
+    <!-- A 2D hand that points at the control being taught. A glow says "this is
+         special"; a hand says "put your finger here", which is the actual
+         instruction, and it reads the same on a phone and a desktop. -->
+    <div id="tap-hint" hidden>
+      <span class="tap-ring"></span>
+      <svg class="tap-hand" viewBox="0 0 64 74" aria-hidden="true">
+        <path d="M25 38V12a5 5 0 0 1 10 0v20" fill="#ffd9b3" stroke="#2b1c10" stroke-width="2.6" stroke-linejoin="round"/>
+        <path d="M35 32v-6a5 5 0 0 1 10 0v10" fill="#ffd9b3" stroke="#2b1c10" stroke-width="2.6" stroke-linejoin="round"/>
+        <path d="M45 36v-4a5 5 0 0 1 10 0v18c0 11-7 20-19 20h-4c-8 0-12-4-16-11l-8-14a5 5 0 0 1 8-6l7 8"
+              fill="#ffd9b3" stroke="#2b1c10" stroke-width="2.6" stroke-linejoin="round"/>
+      </svg>
+      <b id="tap-hint-text"></b>
     </div>
 
     <div id="store-progress" hidden><span>2s</span></div>
