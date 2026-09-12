@@ -21,6 +21,7 @@ const note  = (deg, oct = 0) =>
 class AudioEngine {
   constructor(){
     this.ready = false;
+    this._rebuilds = 0;          // how many contexts we have replaced this session
     this.enabled = true;
     this.vol = { master: 0.85, sfx: 0.75, music: 0.24 };
     try {
@@ -99,11 +100,17 @@ class AudioEngine {
     if (ctx.state === 'running'){ this._unlock(); return; }
     ctx.resume().catch(() => {});
     clearTimeout(this._resumeCheck);
-    // give the resume a moment; if it did not really take, rebuild once
     this._resumeCheck = setTimeout(() => {
-      if (!this._gestured) return;                  // no gesture yet: nothing is allowed to start
-      if (this.ctx && this.ctx.state !== 'running') this._rebuild();
-      else this._unlock();
+      const c = this.ctx;
+      if (!c || !this._gestured) return;            // no gesture yet: nothing may start
+      if (c.state === 'running'){ this._unlock(); return; }
+      /* Only replace a context that is genuinely dead. A merely 'suspended'
+         one comes back on the next gesture, and rebuilding it would be
+         actively harmful: browsers cap how many AudioContexts a page may
+         create (Safari allows a handful), so a rebuild per tap would burn
+         through the quota and leave the game silent for good — the exact
+         failure this code exists to prevent. */
+      if ((c.state === 'interrupted' || c.state === 'closed') && this._rebuilds < 2) this._rebuild();
     }, 400);
   }
 
@@ -123,6 +130,7 @@ class AudioEngine {
   _rebuild(){
     if (this._rebuilding) return;
     this._rebuilding = true;
+    this._rebuilds = (this._rebuilds || 0) + 1;     // bounded: see resume()
     const old = this.ctx;
     this.ctx = null; this.ready = false; this._unlocked = false;
     // close() rejects asynchronously on an already-closed context, and the page
