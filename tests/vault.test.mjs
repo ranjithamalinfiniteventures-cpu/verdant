@@ -2,8 +2,12 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 const storage = new Map();
-const src = readFileSync(new URL('../src/game/vault.js', import.meta.url), 'utf8').replaceAll('export ', '');
-const ctx = vm.createContext({ Math, JSON, Number, localStorage: { getItem: k => storage.get(k) ?? null, setItem: (k, v) => storage.set(k, v) } });
+// vault.js persists through the platform storage shim, so strip its import and
+// hand the sandbox an equivalent `storage`.
+const src = readFileSync(new URL('../src/game/vault.js', import.meta.url), 'utf8')
+  .replace(/^import .*\n/gm, '').replaceAll('export ', '');
+const store = { getItem: k => storage.get(k) ?? null, setItem: (k, v) => storage.set(k, String(v)), removeItem: k => storage.delete(k) };
+const ctx = vm.createContext({ Math, JSON, Number, storage: store, localStorage: store });
 vm.runInContext(src + '\nglobalThis.Vault = Vault; globalThis.PERKS = PERKS;', ctx);
 const v = new ctx.Vault();
 assert.equal(v.gems, 0);

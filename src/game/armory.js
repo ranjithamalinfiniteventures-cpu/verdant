@@ -2,6 +2,8 @@ import { gunIllustration } from './gun-designs.js';
 import { GUNS } from './weapons.js';
 import { PERKS } from './vault.js';
 import { audio } from '../core/audio.js';
+import { GRENADE_PRICE, GRENADES_PER_FLOOR } from './grenade.js';
+import { storage } from '../core/platform.js';
 
 const KEY = 'verdant.armory.v1';
 export const FIRST_UPGRADE_COST = 120;
@@ -10,9 +12,10 @@ export class Armory {
     this.weapon = weapon; this.player = player; this.input = input;
     this.coins = 0; this.levels = { laser:1 }; this.selected = 'laser';
     this.healsThisRun = 0;   // resets each run; see resetRun()
+    this.nades = null;       // the per-floor grenade stock (NadeStock), set from main
     let hasSave = false;
     try {
-      const saved = JSON.parse(localStorage.getItem(KEY));
+      const saved = JSON.parse(storage.getItem(KEY));
       if (saved){
         hasSave = true;
         this.coins = Number.isSafeInteger(saved.coins) && saved.coins >= 0 ? saved.coins : 0;
@@ -41,6 +44,7 @@ export class Armory {
     this.medbayEl = document.getElementById('medbay');
     this.medbayEl?.addEventListener('click', e => {
       if (e.target.closest('button[data-medbay]')) this.buyHeal();
+      if (e.target.closest('button[data-grenade]')) this.buyGrenade();
     });
     this.apply(); this.render();
   }
@@ -67,7 +71,7 @@ export class Armory {
   open(){ if (!this.storeLatched || this.dwell < 2) return; this.resetInput(); this.render(); this.dialog.showModal(); this.onOpen?.(this.station); }
   close(){ this.dialog.close(); }
   save(){
-    try { localStorage.setItem(KEY, JSON.stringify({ coins:this.coins, levels:this.levels, selected:this.selected })); }
+    try { storage.setItem(KEY, JSON.stringify({ coins:this.coins, levels:this.levels, selected:this.selected })); }
     catch { this.status.textContent = 'Storage unavailable — progress lasts for this session.'; }
   }
   earn(n){ this.coins += n; this.save(); this.updateWallet(); }
@@ -123,7 +127,45 @@ export class Armory {
         <button data-medbay="heal" ${full || this.coins < cost ? 'disabled' : ''}>
           ${full ? 'Full health' : `Patch up · ${cost} coins`}
         </button>
+      </article>
+      ${this.renderGrenade()}`;
+  }
+  /* Grenades are bought for the floor you're on: at most two thrown per floor,
+     and whatever you haven't thrown is gone when you move on (the pit resets
+     the throws every wave instead, and lets unthrown ones ride along). */
+  renderGrenade(){
+    const n = this.nades;
+    if (!n) return '';
+    const pit = n.floorKey === 'pit';
+    const where = pit ? 'WAVE' : 'FLOOR';
+    const capped = !n.canBuy;
+    return `
+      <article class="medbay-card ordnance ${n.stock ? 'owned' : ''}">
+        <div class="medbay-info">
+          <h3>FRAG GRENADE</h3>
+          <small>IN POUCH ${n.stock} · THROWN ${n.uses} / ${GRENADES_PER_FLOOR} THIS ${where}</small>
+          <p>${pit ? 'Two throws a wave. Unthrown grenades stay with you between waves.'
+            : 'For this floor only — two throws at most, and unthrown ones are left behind when you move on.'}
+            Drag from the grenade button to aim${matchMedia('(pointer:fine)').matches ? ' (or hold G and point)' : ''}.</p>
+        </div>
+        <button data-grenade="buy" ${capped || this.coins < GRENADE_PRICE ? 'disabled' : ''}>
+          ${capped ? `${where === 'WAVE' ? 'Wave' : 'Floor'} limit reached` : `Buy 1 · ${GRENADE_PRICE} coins`}
+        </button>
       </article>`;
+  }
+  buyGrenade(){
+    const n = this.nades;
+    if (!this.paused || !n || !n.canBuy || this.coins < GRENADE_PRICE) return false;
+    this.coins -= GRENADE_PRICE;
+    n.buy();
+    this.status.textContent = n.canBuy
+      ? `Frag grenade in the pouch (${n.stock}). You can carry one more this ${n.floorKey === 'pit' ? 'wave' : 'floor'}.`
+      : `Frag grenade in the pouch (${n.stock}). That's the limit for this ${n.floorKey === 'pit' ? 'wave' : 'floor'}.`;
+    audio.confirm();
+    this.render();
+    this.save();
+    this.onGrenade?.();
+    return true;
   }
   buyHeal(){
     if (!this.paused) return false;

@@ -25,7 +25,9 @@ const result = await build({
   minify: true,
   format: 'esm',
   target: ['es2020'],
-  legalComments: 'none',
+  // MIT and OFL both require their notices to travel with the code: keep the
+  // @license blocks (three.js and friends) at the end of the bundle.
+  legalComments: 'eof',
   outfile: join(dist, 'verdant.js'),
   alias: { 'three': join(root, 'node_modules/three/build/three.module.js') },
   plugins: [{
@@ -52,9 +54,19 @@ if (/<script\s+type=["']importmap["']/.test(html) || /src=["']\.\/src\/main\.js[
 writeFileSync(join(dist, 'index.html'), html);
 
 cpSync(join(root, 'assets'), join(dist, 'assets'), { recursive: true });
+cpSync(join(root, 'THIRD-PARTY.md'), join(dist, 'THIRD-PARTY.md'));
+
+// the notices are a legal condition of shipping, not a nicety — fail the build
+// rather than quietly publishing without them
+const bundle = readFileSync(join(dist, 'verdant.js'), 'utf8');
+if (!/Three\.js Authors/.test(bundle)) throw new Error('three.js MIT notice missing from the bundle');
+for (const f of ['assets/fonts/OFL.txt', 'THIRD-PARTY.md'])
+  if (!statSync(join(dist, f)).size) throw new Error(`${f} missing from dist`);
 
 const kb = p => (statSync(p).size / 1024).toFixed(0) + ' KB';
 console.log('dist/index.html   ', kb(join(dist, 'index.html')));
 console.log('dist/verdant.js   ', kb(join(dist, 'verdant.js')));
 console.log('dist/assets/      ', 'fonts + art');
-console.log('\nZip the contents of dist/ and upload. No external requests.');
+console.log('\nZip the contents of dist/ and upload.');
+console.log('One external request: the CrazyGames SDK (gameplay events, sitelock,');
+console.log('storage, account name). It is optional — the game runs without it.');

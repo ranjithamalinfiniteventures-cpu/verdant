@@ -5,46 +5,68 @@
    a remote backend behind the same interface so pointing it at a real server is
    a one-line change and nothing above it has to move.
 
-   To go global: stand up an endpoint that accepts
-       POST <url>   { name, seconds, kills, coins, at }
-       GET  <url>?limit=20  ->  [ { name, seconds, kills, coins, at }, ... ]
-   then set REMOTE_URL below. Anything works — a tiny Node/Express route, a
-   Cloudflare Worker + KV, Supabase, Firebase. Validate on the server: never
-   trust a time posted by a browser you don't control. */
+   The shared board is api/scores.js — a Vercel function in front of Supabase,
+   which does the validating, because a score posted by a browser you don't
+   control is a claim, not a fact. See docs/leaderboard.md.
 
-const REMOTE_URL = null;          // ← set this to share scores between players
-const KEY = 'verdant.leaderboard.v1';
+   Both backends run together: every run is written to this device either way,
+   and the shared board is used when it answers. If it is missing (a downloaded
+   build with no server), slow, or broken, the board silently becomes a local
+   one — a leaderboard outage must never cost someone their run. */
+
+import { storage } from '../core/platform.js';
+
+/* Same origin on the deployed site; the absolute URL lets a downloaded or
+   portal-hosted build reach the same board (the function allows cross-origin).
+   Change this if the deployment moves. */
+const API = 'https://verdant-black.vercel.app/api/scores';
+const REMOTE_URL = (() => {
+  if (typeof location === 'undefined' || !/^https?:$/.test(location.protocol)) return null;   // node, file://
+  return /^(localhost|127\.0\.0\.1|\[?::1\]?)$/.test(location.hostname) ? '/api/scores' : API;
+})();
+let remoteDownUntil = 0;          // after a failure, stop hammering it for a minute
+const remoteUp = () => !!REMOTE_URL && Date.now() >= remoteDownUntil;
 const NAME_KEY = 'verdant.pilot';
 const MAX = 50;
+
+/* Two boards. The tower ranks the fastest full escape; the Heartwood Pit ranks
+   the deepest wave reached (ties go to more kills, then the quicker run). Each
+   keeps its own local list; a remote server gets `?board=` to tell them apart. */
+const BOARDS = {
+  tower:   { key: 'verdant.leaderboard.v1',
+             sort: (a, b) => a.seconds - b.seconds },
+  endless: { key: 'verdant.leaderboard.endless.v1',
+             sort: (a, b) => (b.wave - a.wave) || (b.kills - a.kills) || (a.seconds - b.seconds) },
+};
 
 const clean = (s) => String(s || '').toUpperCase().replace(/[^A-Z0-9 _-]/g, '').trim().slice(0, 12);
 
 class LocalBackend {
-  async top(limit = 10){
-    let rows = [];
-    try { rows = JSON.parse(localStorage.getItem(KEY) || '[]'); } catch {}
-    return rows.sort((a, b) => a.seconds - b.seconds).slice(0, limit);
+  constructor(board){ this.key = BOARDS[board].key; this.sort = BOARDS[board].sort; }
+  read(){
+    try { const r = JSON.parse(storage.getItem(this.key) || '[]'); return Array.isArray(r) ? r : []; }
+    catch { return []; }
   }
+  async top(limit = 10){ return this.read().sort(this.sort).slice(0, limit); }
   async submit(entry){
-    let rows = [];
-    try { rows = JSON.parse(localStorage.getItem(KEY) || '[]'); } catch {}
+    let rows = this.read();
     rows.push(entry);
-    rows.sort((a, b) => a.seconds - b.seconds);
+    rows.sort(this.sort);
     rows = rows.slice(0, MAX);
-    try { localStorage.setItem(KEY, JSON.stringify(rows)); } catch {}
+    try { storage.setItem(this.key, JSON.stringify(rows)); } catch {}
     return rows;
   }
 }
 
 class RemoteBackend {
-  constructor(url){ this.url = url; }
+  constructor(url, board){ this.url = url; this.board = board; }
   async top(limit = 10){
-    const r = await fetch(`${this.url}?limit=${limit}`, { headers: { accept: 'application/json' } });
+    const r = await fetch(`${this.url}?board=${this.board}&limit=${limit}`, { headers: { accept: 'application/json' } });
     if (!r.ok) throw new Error(`leaderboard ${r.status}`);
     return await r.json();
   }
   async submit(entry){
-    const r = await fetch(this.url, {
+    const r = await fetch(`${this.url}?board=${this.board}`, {
       method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(entry),
     });
     if (!r.ok) throw new Error(`leaderboard ${r.status}`);
@@ -52,24 +74,54 @@ class RemoteBackend {
   }
 }
 
+/* The shared board when it answers, this device when it doesn't. */
+class Backend {
+  constructor(board){
+    this.local = new LocalBackend(board);
+    this.remote = REMOTE_URL ? new RemoteBackend(REMOTE_URL, board) : null;
+  }
+  down(e){
+    remoteDownUntil = Date.now() + 60e3;
+    console.warn('[verdant] shared leaderboard unavailable, using this device:', e.message);
+  }
+  async top(limit = 10){
+    if (this.remote && remoteUp()){
+      try { return await this.remote.top(limit); } catch (e){ this.down(e); }
+    }
+    return this.local.top(limit);
+  }
+  async submit(entry){
+    await this.local.submit(entry);            // your own runs are kept here regardless
+    if (this.remote && remoteUp()){
+      try { return await this.remote.submit(entry); } catch (e){ this.down(e); }
+    }
+    return this.local.top(10);
+  }
+}
+
+const backendFor = (board) => new Backend(board);
+
+async function safeTop(backend, limit){
+  try { return await backend.top(limit); }
+  catch (e){ console.warn('[verdant] leaderboard unavailable:', e.message); return null; }
+}
+
 export const leaderboard = {
-  backend: REMOTE_URL ? new RemoteBackend(REMOTE_URL) : new LocalBackend(),
-  /** true when scores are shared; false when they are only this device's */
-  get shared(){ return !!REMOTE_URL; },
+  backend: backendFor('tower'),
+  /** true when scores are shared; false when they are only this device's.
+      Read after a top()/submit(), so a dead server shows as THIS DEVICE. */
+  get shared(){ return remoteUp(); },
 
   getName(){
-    try { return localStorage.getItem(NAME_KEY) || ''; } catch { return ''; }
+    try { return storage.getItem(NAME_KEY) || ''; } catch { return ''; }
   },
   setName(n){
     const c = clean(n) || 'PILOT';
-    try { localStorage.setItem(NAME_KEY, c); } catch {}
+    try { storage.setItem(NAME_KEY, c); } catch {}
     return c;
   },
 
-  async top(limit = 10){
-    try { return await this.backend.top(limit); }
-    catch (e){ console.warn('[verdant] leaderboard unavailable:', e.message); return null; }
-  },
+  async top(limit = 10){ return safeTop(this.backend, limit); },
 
   /** Only a full escape counts — a death is not a time. */
   async submit({ name, seconds, kills, coins, floors, required = 20, assisted = false }){
@@ -80,6 +132,21 @@ export const leaderboard = {
     };
     try { return { rows: await this.backend.submit(entry), entry }; }
     catch (e){ console.warn('[verdant] could not submit:', e.message); return { rows: null, entry }; }
+  },
+
+  /** The Heartwood Pit: the deepest wave reached. */
+  endless: {
+    backend: backendFor('endless'),
+    async top(limit = 10){ return safeTop(this.backend, limit); },
+    async submit({ name, wave, kills, seconds, assisted = false }){
+      if (assisted || !Number.isFinite(wave) || wave < 1) return null;
+      const entry = {
+        name: leaderboard.setName(name), wave: wave | 0, kills: kills | 0,
+        seconds: Math.round((seconds || 0) * 100) / 100, at: Date.now(),
+      };
+      try { return { rows: await this.backend.submit(entry), entry }; }
+      catch (e){ console.warn('[verdant] could not submit:', e.message); return { rows: null, entry }; }
+    },
   },
 
   format(sec){

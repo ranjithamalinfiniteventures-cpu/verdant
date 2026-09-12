@@ -5,6 +5,8 @@
    Drop an mp3/ogg at assets/audio/music.* and loadTrack() will crossfade to it
    instead of the generative bed. */
 
+import { storage } from './platform.js';
+
 const MUSIC_ENABLED = false;
 
 const clamp = (v, a, b) => Math.min(Math.max(v, a), b);
@@ -22,7 +24,7 @@ class AudioEngine {
     this.enabled = true;
     this.vol = { master: 0.85, sfx: 0.75, music: 0.24 };
     try {
-      const saved = JSON.parse(localStorage.getItem('verdant.audio.v2') || 'null');
+      const saved = JSON.parse(storage.getItem('verdant.audio.v2') || 'null');
       if (saved) Object.assign(this.vol, saved.vol ?? {}), this.enabled = saved.enabled ?? true;
     } catch {}
     this._shots = [];
@@ -359,6 +361,21 @@ class AudioEngine {
 
   ui(){ this.tone({ freq: 880, type: 'sine', dur: 0.05, gain: 0.1 }); }
 
+  /** Grenade leaving the hand: a short rising whoosh. */
+  toss(){
+    this.noise({ dur: 0.24, gain: 0.13, type: 'bandpass', freq: 700, sweep: 2800, q: 1.4 });
+  }
+
+  /* Grenade going off. Three layers so it reads as big without being harsh: a
+     sub thump that drops in pitch, a low-passed body with a reverb tail, and a
+     short bright crack on top. Everything else ducks for a moment under it. */
+  boom(){
+    this.tone({ freq: 96, type: 'sine', dur: 0.6, gain: 0.55, a: 0.002, slide: 34 });
+    this.noise({ dur: 0.75, gain: 0.42, type: 'lowpass', freq: 1900, sweep: 110, q: 0.8, verb: 0.55 });
+    this.noise({ dur: 0.1, gain: 0.22, type: 'highpass', freq: 3200, q: 0.7 });
+    this.duck(0.45, 0.55);
+  }
+
   /* -------------------------------------------------------------- music -- */
   _startMusic(){
     const ctx = this.ctx;
@@ -488,7 +505,7 @@ class AudioEngine {
   }
 
   _save(){
-    try { localStorage.setItem('verdant.audio.v2', JSON.stringify({ vol: this.vol, enabled: this.enabled })); } catch {}
+    try { storage.setItem('verdant.audio.v2', JSON.stringify({ vol: this.vol, enabled: this.enabled })); } catch {}
   }
 
   /** Optional: swap the generative bed for a real track dropped in assets/audio. */

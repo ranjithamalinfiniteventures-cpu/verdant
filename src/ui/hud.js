@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { audio } from '../core/audio.js';
 import { Minimap } from './minimap.js';
 import { leaderboard } from '../game/leaderboard.js';
+import { platform } from '../core/platform.js';
 
 const $ = id => document.getElementById(id);
 
@@ -230,6 +231,44 @@ export class Hud {
     }, 2300);
   }
 
+  /* Signed in on the portal? Then that name is the callsign — platforms that
+     provide an identity require it to be used rather than asking for another
+     one. The field turns into a label; everywhere else it stays editable. */
+  async applyPortalName(inputEl){
+    const user = await platform.user();
+    if (!user) return;
+    inputEl.value = user.name;
+    inputEl.readOnly = true;
+    inputEl.title = 'Your CrazyGames name';
+    inputEl.classList.add('locked');
+  }
+
+  /* The pit's board: deepest wave first, ties to more kills. */
+  async renderEndlessBoard(mine){
+    const list = document.getElementById('eo-list');
+    if (!list) return;
+    const rows = await leaderboard.endless.top(8);
+    // after the fetch: `shared` only knows the server is there once it has answered
+    document.getElementById('eo-scope').textContent = leaderboard.shared ? 'GLOBAL' : 'THIS DEVICE';
+    list.textContent = '';
+    if (!rows || !rows.length){
+      const li = document.createElement('li');
+      li.className = 'empty';
+      li.textContent = rows ? 'No runs on the board yet — put the first one up.' : 'Leaderboard unreachable.';
+      list.appendChild(li);
+      return;
+    }
+    rows.forEach((r, i) => {
+      const li = document.createElement('li');
+      if (mine && r.at === mine.at && r.name === mine.name) li.className = 'me';
+      const rank = document.createElement('b'); rank.textContent = `${i + 1}.`;
+      const nm = document.createElement('span'); nm.textContent = r.name;
+      const w = document.createElement('i'); w.textContent = `WAVE ${r.wave} · ${r.kills} KILLS`;
+      li.append(rank, nm, w);
+      list.appendChild(li);
+    });
+  }
+
   showEndlessOver(stats, onAgain, onTower){
     const $$ = id => document.getElementById(id);
     $$('eo-wave').textContent = stats.wave;
@@ -241,6 +280,22 @@ export class Hud {
     $$('eo-time').textContent = `${m}:${String(sec).padStart(2, '0')}`;
     $$('eo-coins').textContent = stats.coins;
     $$('eo-gems').textContent = stats.gems;
+    // callsign + submit, one entry per run
+    const name = $$('eo-name'), submit = $$('eo-submit');
+    name.value = leaderboard.getName();
+    this.applyPortalName(name);
+    const eligible = !stats.assisted && stats.wave >= 1;
+    submit.disabled = !eligible;
+    submit.textContent = stats.assisted ? 'TEST RUN · NOT RANKED' : 'SUBMIT WAVE';
+    submit.onclick = async () => {
+      if (!eligible || submit.disabled) return;
+      submit.disabled = true;
+      submit.textContent = 'SUBMITTED';
+      const res = await leaderboard.endless.submit({ name: name.value, wave: stats.wave, kills: stats.kills,
+        seconds: stats.seconds, assisted: stats.assisted });
+      await this.renderEndlessBoard(res && res.entry);
+    };
+    this.renderEndlessBoard(null);
     $$('eo-again').onclick = () => { this.hideEndlessOver(); onAgain(); };
     $$('eo-tower').onclick = () => { this.hideEndlessOver(); onTower(); };
     $$('endless-over').classList.add('on');
@@ -360,9 +415,9 @@ export class Hud {
   /** Render the board; `mine` highlights the row just submitted. */
   async renderBoard(mine){
     const list = document.getElementById('rs-list');
+    const rows = await leaderboard.top(10);
     document.getElementById('rs-scope').textContent =
       leaderboard.shared ? 'GLOBAL' : 'THIS DEVICE';
-    const rows = await leaderboard.top(10);
     list.textContent = '';
     if (!rows || !rows.length){
       const li = document.createElement('li');
@@ -394,6 +449,7 @@ export class Hud {
     const name = $$('rs-name');
     const submit = $$('rs-submit');
     name.value = leaderboard.getName();
+    this.applyPortalName(name);
     // only a full escape is a time worth ranking
     const eligible = !stats.assisted && stats.floors >= this.floorCount;
     submit.disabled = !eligible;

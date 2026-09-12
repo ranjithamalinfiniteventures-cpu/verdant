@@ -361,6 +361,7 @@ varying vec2 vRoot;
   sign.position.set(store.x, 3.0, store.z + 2.1);
   sign.userData.noMerge = true;
   g.add(sign);
+  store.label = sign;   // the shop hides this so it doesn't hang in the shop camera's view
 
   /* ------------------------------------------------------ the abyss -- */
   // giant trunks falling away into the dark past the rim — the scale of the

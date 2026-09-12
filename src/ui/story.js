@@ -1,3 +1,4 @@
+import { storage } from '../core/platform.js';
 const STORY_KEY = 'verdant.story.v1';
 
 const PANELS = [
@@ -50,9 +51,13 @@ export class Story {
       if (e.code === 'Escape'){ e.preventDefault(); this.finish(); }
     });
 
+    /* The intro no longer plays itself. Portals require a new player to land in
+       gameplay immediately (CrazyGames allows at most one click), and four
+       panels before floor 1 is four. It lives on the STORY button instead, and
+       a first-time player is pointed at it once the floor is running. */
     let seen = false;
-    try { seen = localStorage.getItem(STORY_KEY) === 'seen'; } catch {}
-    if (!seen) this.start(true);
+    try { seen = storage.getItem(STORY_KEY) === 'seen'; } catch {}
+    this.firstTime = !seen;
   }
 
   start(firstRun = false){
@@ -92,7 +97,7 @@ export class Story {
     if (!this.active) return;
     const wasFirstRun = this.firstRun;
     this.active = false;
-    try { localStorage.setItem(STORY_KEY, 'seen'); } catch {}
+    try { storage.setItem(STORY_KEY, 'seen'); } catch {}
     this.root.classList.add('leaving');
     setTimeout(() => {
       this.root.hidden = true;

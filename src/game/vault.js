@@ -12,6 +12,8 @@
                                 on a 10% chance, as a green pickup
      • the extraction hold-out  3 on surviving it */
 
+import { storage } from '../core/platform.js';
+
 const KEY = 'verdant.vault.v1';
 
 export const PERKS = [
@@ -41,7 +43,7 @@ export class Vault {
 
   load(){
     try {
-      const s = JSON.parse(localStorage.getItem(KEY));
+      const s = JSON.parse(storage.getItem(KEY));
       if (s){
         this.gems = Number.isSafeInteger(s.gems) && s.gems >= 0 ? s.gems : 0;
         for (const p of PERKS){
@@ -53,7 +55,7 @@ export class Vault {
   }
 
   save(){
-    try { localStorage.setItem(KEY, JSON.stringify({ gems: this.gems, levels: this.levels })); }
+    try { storage.setItem(KEY, JSON.stringify({ gems: this.gems, levels: this.levels })); }
     catch {}
   }
 

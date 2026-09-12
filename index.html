@@ -38,20 +38,51 @@
     } catch (e) { /* nothing left to do */ }
   }
 
+  /* Once the game is up and drawing, an error in one handler (opening a shop,
+     say) usually leaves the game playable. Covering the screen then turns a
+     glitch into a dead game — so after boot it's a small banner you can tap
+     away, and the full-screen report is kept for failures that stop the boot. */
+  var bannerShown = false;
+  function banner(detail) {
+    if (bannerShown) return; bannerShown = true;
+    try {
+      var b = document.createElement('div');
+      b.setAttribute('id', 'fatal-banner');
+      b.style.cssText = 'position:fixed;left:50%;bottom:14px;transform:translateX(-50%);z-index:99999;' +
+        'max-width:92vw;padding:10px 14px;border-radius:10px;background:rgba(11,15,20,.94);' +
+        'border:1px solid #ff8c42;color:#ffd9a0;font:12px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace;cursor:pointer';
+      b.textContent = 'Something went wrong (tap to dismiss): ' + detail;
+      b.onclick = function () { b.remove(); bannerShown = false; };
+      (document.body || document.documentElement).appendChild(b);
+    } catch (e) {}
+  }
+  function booted() { return !!(window.VERDANT && window.VERDANT.frames > 0); }
+
   window.addEventListener('error', function (e) {
     if (e && e.target && e.target.tagName === 'SCRIPT')
-      show('A script failed to load', (e.target.src || 'inline script'));
-    else
-      show('Uncaught error', (e && e.message ? e.message : e) +
-        '\n' + ((e && e.filename) || '') + ':' + ((e && e.lineno) || ''));
+      return show('A script failed to load', (e.target.src || 'inline script'));
+    var detail = (e && e.message ? e.message : e) + ' · ' + ((e && e.filename) || '') + ':' + ((e && e.lineno) || '');
+    if (booted()) banner(detail); else show('Uncaught error', detail.replace(' · ', '\n'));
   }, true);
 
   window.addEventListener('unhandledrejection', function (e) {
-    show('Unhandled promise rejection', (e && e.reason && (e.reason.stack || e.reason.message)) || e.reason);
+    var detail = (e && e.reason && (e.reason.stack || e.reason.message)) || e.reason;
+    if (booted()) banner(String(detail).split('\n')[0]); else show('Unhandled promise rejection', detail);
   });
 
   window.addEventListener('load', function () {
-    setTimeout(function () {
+    function check() {
+      /* A tab opened in the background gets no animation frames until it is
+         looked at, so "never drew a frame" is only evidence of anything while
+         the page is visible. Wait for it to be, then give it a few seconds. */
+      if (document.hidden) {
+        document.addEventListener('visibilitychange', function again() {
+          if (document.hidden) return;
+          document.removeEventListener('visibilitychange', again);
+          setTimeout(check, 4000);
+        });
+        return;
+      }
       if (!window.VERDANT) {
         show('The game did not start',
           'No error was thrown, but window.VERDANT was never set.\n' +
@@ -64,7 +95,8 @@
         show('The game loaded but never drew a frame',
           'Modules resolved and setup finished, but the render loop has not run.');
       }
-    }, 8000);
+    }
+    setTimeout(check, 8000);
   });
 })();
 </script>
@@ -144,13 +176,30 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
   display:grid;place-items:center;box-shadow:0 calc(var(--u)*.3) 0 rgba(0,0,0,.5),
   0 0 calc(var(--u)*2) rgba(245,197,24,.35),inset 0 2px 0 rgba(255,255,255,.5)}
 .weap svg{width:70%;height:70%}
+/* grenade: sits to the left of the weapon card, same cartoon family, orange */
+.nade{position:absolute;right:calc(100% + var(--u)*.9);bottom:calc(var(--u)*1.2);cursor:pointer;
+  width:calc(var(--u)*4.2);height:calc(var(--u)*4.2);border-radius:50%;padding:0;
+  background:linear-gradient(180deg,#ffb066,#f06a1d);border:2px solid rgba(255,255,255,.92);
+  display:grid;place-items:center;box-shadow:0 calc(var(--u)*.3) 0 rgba(0,0,0,.5),0 0 calc(var(--u)*1.6) rgba(255,122,40,.4)}
+.nade svg{width:66%;height:66%}
+.nade b{position:absolute;right:-6px;top:-6px;min-width:22px;height:22px;border-radius:11px;padding:0 5px;
+  background:#0b0f14;border:2px solid #fff;color:#fff;font:800 12px/18px var(--f);box-sizing:border-box}
+.nade:active{transform:translateY(2px)}
+.nade.empty{filter:grayscale(1) brightness(.6);cursor:default}
+/* a callsign supplied by the portal account: shown, not editable */
+#rs-name.locked,#eo-name.locked{opacity:.85;cursor:default;border-style:dashed}
+/* touch-action:none so a drag from the button aims instead of scrolling */
+.nade{touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+.nade.aiming{box-shadow:0 0 0 calc(var(--u)*.35) rgba(255,176,102,.55),0 0 calc(var(--u)*2.4) rgba(255,122,40,.8);
+  animation:nadepulse .6s ease-in-out infinite alternate}
+@keyframes nadepulse{to{transform:scale(1.08)}}
 .wname{font-size:calc(var(--u)*.68);font-weight:700;letter-spacing:.1em;margin-top:calc(var(--u)*.45);
   text-shadow:0 1px 4px #000;opacity:.9}
 
 #stick{position:absolute;width:calc(var(--u)*8);height:calc(var(--u)*8);border-radius:50%;
   border:2px solid rgba(255,255,255,.28);background:rgba(255,255,255,.06);
   transform:translate(-50%,-50%);opacity:0;transition:opacity .18s;pointer-events:none;
-  backdrop-filter:blur(3px)}
+  -webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px)}
 #stick i{position:absolute;left:50%;top:50%;width:calc(var(--u)*3.4);height:calc(var(--u)*3.4);
   margin:calc(var(--u)*-1.7) 0 0 calc(var(--u)*-1.7);border-radius:50%;
   background:rgba(255,255,255,.34);border:2px solid rgba(255,255,255,.65);
@@ -224,22 +273,22 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
   border-bottom:1px solid #2c4a54;padding-bottom:calc(var(--u)*.4);margin-bottom:calc(var(--u)*.6)}
 .lb-head span{font-size:calc(var(--u)*.78);letter-spacing:.24em;color:#7ef0d8;font-weight:800}
 .lb-head em{font-style:normal;font-size:calc(var(--u)*.62);letter-spacing:.16em;color:rgba(255,255,255,.35)}
-#rs-list{list-style:none;margin:0;padding:0;max-height:calc(var(--u)*12);overflow-y:auto}
-#rs-list li{display:grid;grid-template-columns:calc(var(--u)*2) 1fr auto;gap:calc(var(--u)*.6);
+#rs-list,#eo-list{list-style:none;margin:0;padding:0;max-height:calc(var(--u)*12);overflow-y:auto}
+#rs-list li,#eo-list li{display:grid;grid-template-columns:calc(var(--u)*2) 1fr auto;gap:calc(var(--u)*.6);
   font-size:calc(var(--u)*.86);padding:calc(var(--u)*.28) 0;color:rgba(255,255,255,.72)}
-#rs-list li b{font-weight:800;color:rgba(255,255,255,.4)}
-#rs-list li i{font-style:normal;font-family:var(--mono,ui-monospace,monospace);color:#bff8ec}
-#rs-list li.me{color:#fff}
-#rs-list li.me b,#rs-list li.me i{color:#7ef0d8}
-#rs-list li.empty{grid-template-columns:1fr;color:rgba(255,255,255,.3);font-size:calc(var(--u)*.72)}
+#rs-list li b,#eo-list li b{font-weight:800;color:rgba(255,255,255,.4)}
+#rs-list li i,#eo-list li i{font-style:normal;font-family:var(--mono,ui-monospace,monospace);color:#bff8ec}
+#rs-list li.me,#eo-list li.me{color:#fff}
+#rs-list li.me b,#rs-list li.me i,#eo-list li.me b,#eo-list li.me i{color:#7ef0d8}
+#rs-list li.empty,#eo-list li.empty{grid-template-columns:1fr;color:rgba(255,255,255,.3);font-size:calc(var(--u)*.72)}
 .lb-entry{display:flex;gap:calc(var(--u)*.6);margin-top:calc(var(--u)*.9)}
-#rs-name{flex:1;font:inherit;font-weight:700;font-size:calc(var(--u)*.84);letter-spacing:.14em;
+#rs-name,#eo-name{flex:1;font:inherit;font-weight:700;font-size:calc(var(--u)*.84);letter-spacing:.14em;
   text-transform:uppercase;padding:calc(var(--u)*.55) calc(var(--u)*.9);border-radius:calc(var(--u)*.55);
   border:1px solid #2c4a54;background:rgba(6,14,18,.7);color:#dff8f2;min-width:0}
-#rs-name::placeholder{color:rgba(255,255,255,.25);letter-spacing:.1em}
-#rs-submit{margin:0!important;font-size:calc(var(--u)*.78)!important;
+#rs-name::placeholder,#eo-name::placeholder{color:rgba(255,255,255,.25);letter-spacing:.1em}
+#rs-submit,#eo-submit{margin:0!important;font-size:calc(var(--u)*.78)!important;
   padding:calc(var(--u)*.55) calc(var(--u)*1.1)!important;white-space:nowrap}
-#rs-submit:disabled{opacity:.4;cursor:default;border-color:#2c4a54;color:rgba(255,255,255,.4)}
+#rs-submit:disabled,#eo-submit:disabled{opacity:.4;cursor:default;border-color:#2c4a54;color:rgba(255,255,255,.4)}
 
 #results button{margin-top:calc(var(--u)*2.2);font:inherit;font-weight:800;
   font-size:calc(var(--u)*.95);letter-spacing:.2em;padding:calc(var(--u)*.9) calc(var(--u)*2.4);
@@ -383,7 +432,12 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
 .medbay-head{display:flex;align-items:baseline;gap:12px;margin:6px 0 6px;border-top:1px solid #23383f;padding-top:8px}
 .medbay-head h3{margin:0;font-size:13px;letter-spacing:.2em;color:#ff8c72}
 .medbay-head span{font-size:10px;letter-spacing:.12em;color:#b38a83}
-#medbay{padding:2px 0 10px}
+#medbay{padding:2px 0 10px;display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media(max-width:620px){#medbay{grid-template-columns:1fr}}
+.medbay-card.ordnance{border-color:#5a3a1c;background:#231a10}
+.medbay-card.ordnance h3{color:#ffd8a8}.medbay-card.ordnance small{color:#f2b36b}
+.medbay-card.ordnance button{background:#6b3a12!important;border-color:#ff8c4255!important}
+.medbay-card.ordnance.owned{opacity:.7}
 .medbay-card{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;
   border:1px solid #4a3230;border-radius:10px;background:#241615;padding:12px 14px}
 .medbay-card.full{opacity:.55}
@@ -440,26 +494,21 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
    floor-1 tutorial box — ever accounted for that, so on a real phone all of
    it landed stacked on top of the header text at once. This pushes each of
    them down in sequence instead of leaving them at desktop offsets. */
-@media(max-width:480px){
-  #hud .h.tc{top:132px}                 /* clears the tl/tr/rc corner clusters above it */
-  #minimap{top:236px;left:10px}         /* clears the header's worst-case 4-room height */
-  #boon{top:344px}
-  #bossbar{top:390px}
-  #mercy{top:344px}
-  #boon:not([hidden]) ~ #mercy{top:390px}
-  #bossbar:not([hidden]) ~ #mercy{top:436px}
-  #store-tutorial{top:345px}
-  /* no keyboard on a phone, and the centred hint ran under the weapon button */
-  .hint{left:14px;transform:none;text-align:left}
-  .hint .kb{display:none}            /* was 18% of viewport height, landing on the header; also kept clear of the minimap directly above it */
-}
+/* Short landscape viewports — a small laptop window, and the 907x510 / 800x450
+   sizes portals QA at. The phone block below keys on WIDTH; this one keys on
+   HEIGHT, because a 800x450 window is "desktop wide" with a phone's vertical
+   room, and every centred badge was landing in the same 90-170px band. Same
+   idea as the phone ladder: one lane, each thing under the last. */
+
+
+
 
 
 /* live floor-upgrade timer — a buff you can lose has to be visible losing it */
 #boon{position:absolute;left:50%;top:104px;transform:translateX(-50%);
   display:flex;align-items:center;gap:8px;padding:7px 14px 7px 10px;border-radius:999px;
   background:rgba(20,16,4,.82);border:1px solid rgba(251,191,36,.55);
-  box-shadow:0 6px 18px rgba(0,0,0,.4);backdrop-filter:blur(3px);
+  box-shadow:0 6px 18px rgba(0,0,0,.4);-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);
   font:800 12px/1 Poppins,system-ui,sans-serif;letter-spacing:.10em;color:#ffe8a3;
   pointer-events:none;z-index:6}
 #boon i{width:9px;height:9px;border-radius:50%;background:#fbbf24;
@@ -538,6 +587,8 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
 .eo-wave b{display:block;font:800 calc(var(--u)*6.2)/1 var(--f);color:#fff}
 .eo-best{font:800 12px var(--f);letter-spacing:.24em;color:#ffd08a;margin-bottom:18px}
 .eo-best.new{color:#7ef0d8;text-shadow:0 0 16px rgba(126,240,216,.6)}
+#eo-board{margin-top:18px;text-align:left}
+#eo-board .lb-head span{color:#ff8ed0}
 #endless-over .stats{display:grid;grid-template-columns:1fr 1fr;gap:calc(var(--u)*1.2) calc(var(--u)*2.4)}
 #endless-over .stats b{display:block;font-size:calc(var(--u)*2);font-weight:800;color:#fff}
 #endless-over .stats span{font-size:calc(var(--u)*.66);letter-spacing:.2em;color:rgba(255,255,255,.42)}
@@ -554,7 +605,7 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
 #mercy{position:absolute;left:50%;top:104px;transform:translateX(-50%);
   display:flex;align-items:center;gap:8px;padding:7px 14px;border-radius:999px;
   background:rgba(10,18,14,.82);border:1px solid rgba(74,222,128,.55);
-  box-shadow:0 6px 18px rgba(0,0,0,.4);backdrop-filter:blur(3px);
+  box-shadow:0 6px 18px rgba(0,0,0,.4);-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);
   font:800 11px/1 Poppins,system-ui,sans-serif;letter-spacing:.08em;color:#bbf7d0;
   pointer-events:none;z-index:6;max-width:min(420px,80vw)}
 #mercy i{width:9px;height:9px;border-radius:50%;background:#4ade80;flex:none;
@@ -592,7 +643,61 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
   border-top:1px solid rgba(255,255,255,.28);
   font:700 11px/1.45 Poppins,system-ui,sans-serif;letter-spacing:.04em;
   color:rgba(255,255,255,.9)}
+
+/* ------------------------------------------------------- responsive last --
+   These two blocks MUST stay at the end of the stylesheet. A media query adds
+   no specificity, so source order decides: while they sat higher up, the base
+   #boon / #mercy / #bossbar rules further down silently won and the phone
+   ladder below did nothing at all (the badges stayed at their desktop 104px,
+   on top of the mobile header). Add new base rules ABOVE this line. */
+@media(max-height:560px) and (min-width:481px){
+  :root{--u:clamp(10px,1.25vmin,13px)}
+  #store-tutorial{top:54px;width:min(430px,56vw);padding:7px 12px;font-size:11px;line-height:1.4}
+  #store-tutorial span{font-size:9px}
+  /* the objective banner runs to 59px tall at this size, so the lane starts
+     below 113px, then 32px per row */
+  #boon,#mercy{top:120px}
+  #boon:not([hidden]) ~ #mercy{top:152px}
+  #bossbar{top:152px}
+  #bossbar:not([hidden]) ~ #mercy{top:184px}
+  #toast{top:196px}
+  #bossbar:not([hidden]) ~ #toast{top:220px}
+  #bossbar:not([hidden]) ~ #wave-banner{top:234px}
+  #store-hint{bottom:74px;font-size:10px;max-width:46vw}
+}
+
+@media(max-width:480px){
+  #hud .h.tc{top:132px}                 /* clears the tl/tr/rc corner clusters above it */
+  #minimap{top:236px;left:10px}         /* clears the header's worst-case 4-room height */
+  #boon{top:344px}
+  #bossbar{top:390px}
+  #mercy{top:344px}
+  #boon:not([hidden]) ~ #mercy{top:390px}
+  #bossbar:not([hidden]) ~ #mercy{top:436px}
+  /* the toast was landing on the minimap (which ends at ~335px here) */
+  #toast{top:472px}
+  #bossbar:not([hidden]) ~ #toast{top:472px}
+  #store-tutorial{top:345px}
+  /* floor 1's objective banner occupies the same lane, so when it is up
+     everything below it shifts down a row rather than printing on top of it */
+  /* the banner wraps to four lines at 375px and runs to ~442px, so the row
+     under it starts at 462, not 440 */
+  #store-tutorial:not([hidden]) ~ #boon,
+  #store-tutorial:not([hidden]) ~ #mercy{top:462px}
+  #store-tutorial:not([hidden]) ~ #bossbar{top:508px}
+  #store-tutorial:not([hidden]) ~ #boon:not([hidden]) ~ #mercy{top:508px}
+  #store-tutorial:not([hidden]) ~ #bossbar:not([hidden]) ~ #mercy{top:554px}
+  #store-tutorial:not([hidden]) ~ #toast{top:590px}
+  /* no keyboard on a phone, and the centred hint ran under the weapon button */
+  .hint{left:14px;transform:none;text-align:left}
+  .hint .kb{display:none}            /* was 18% of viewport height, landing on the header; also kept clear of the minimap directly above it */
+}
 </style>
+<!-- CrazyGames SDK: gameplay events, sitelock, storage that survives their
+     iframe, and the signed-in player's name. Loaded async and every call into
+     it is guarded, so the game runs identically with the script absent —
+     itch, a downloaded build, or our own site. -->
+<script async src="https://sdk.crazygames.com/crazygames-sdk-v2.js"></script>
 <script type="importmap">
 {"imports":{
   "three":"./vendor/three.module.min.js",
@@ -636,6 +741,12 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
     </div>
 
     <div class="h br">
+      <button class="nade" id="nade-btn" hidden aria-label="Throw grenade" title="Aim a grenade — drag from here, or hold G">
+        <svg viewBox="0 0 48 48" aria-hidden="true"><circle cx="22" cy="28" r="13" fill="#1d232b"/>
+          <rect x="17" y="10" width="10" height="7" rx="2" fill="#1d232b"/><path d="M27 13c5-4 10-3 12 1" stroke="#1d232b" stroke-width="3" fill="none" stroke-linecap="round"/>
+          <path d="M14 24h16M14 30h16" stroke="#ffb066" stroke-width="2.4" stroke-linecap="round"/></svg>
+        <b id="nade-count">2</b>
+      </button>
       <button class="weap" id="armory-open" aria-label="Locate armory station" title="Find armory (B)">
         <svg viewBox="0 0 48 48" fill="#1d232b"><rect x="4" y="19" width="27" height="10" rx="2.5"/>
         <rect x="29" y="21" width="16" height="5" rx="2"/><rect x="10" y="27" width="7" height="12" rx="2.5"/>
@@ -646,7 +757,7 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
 
     <div id="store-progress" hidden><span>2s</span></div>
     <div id="store-hint">ARMORY · Cyan pad beside the entrance</div>
-    <div id="store-tutorial" hidden><span>FIRST OBJECTIVE</span>FOLLOW THE CYAN PATH · STAND ON THE ARMORY PAD · UPGRADE YOUR PRUNING LASER</div>
+    <div id="store-tutorial" hidden><span>FIRST OBJECTIVE</span>FOLLOW THE CYAN ARROWS TO THE ARMORY PAD · STAND ON IT · UPGRADE YOUR PRUNING LASER</div>
     <div id="boon" hidden><i></i><span></span><b>30</b></div>
     <div id="bossbar" hidden><span>HEARTROOT</span><div class="track"><i></i><u></u></div></div>
     <div id="mercy" hidden><i></i><span></span></div>
@@ -686,6 +797,14 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
         <div><b id="eo-time">0:00</b><span>SURVIVED</span></div>
         <div><b id="eo-coins">0</b><span>COINS EARNED</span></div>
         <div><b id="eo-gems" style="color:#4ade80">0</b><span>GEMS BANKED</span></div>
+      </div>
+      <div id="eo-board">
+        <div class="lb-head"><span>DEEPEST RUNS</span><em id="eo-scope">THIS DEVICE</em></div>
+        <ol id="eo-list"></ol>
+        <div class="lb-entry">
+          <input id="eo-name" maxlength="12" placeholder="YOUR CALLSIGN" autocomplete="off" spellcheck="false">
+          <button id="eo-submit">SUBMIT WAVE</button>
+        </div>
       </div>
       <div class="eo-actions"><button id="eo-again">FIGHT AGAIN</button><button id="eo-tower" class="ghost">BACK TO THE TOWER</button></div>
     </div></div>
@@ -739,7 +858,7 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
     <p>Station connected. Select your weapon. Every upgrade adds 25% of base damage.</p>
     <div class="armory-wallet"><span id="armory-coins">0</span> COINS · PURCHASES SAVED ON THIS DEVICE</div>
     <div id="gun-list"></div>
-    <div class="medbay-head"><h3>MEDBAY</h3><span>PATCH UP WITH COINS · PRICE CLIMBS EACH USE THIS RUN</span></div>
+    <div class="medbay-head"><h3>SUPPLIES</h3><span>PAID IN COINS · HEALING GETS PRICIER EACH USE THIS RUN</span></div>
     <div id="medbay"></div>
     <div class="vault-head"><h3>SEED VAULT</h3><span><b id="armory-gems">0</b> GEMS · PERMANENT SUIT PERKS · KEPT THROUGH DEATH</span></div>
     <div id="perk-list"></div><p id="armory-status" role="status" aria-live="polite"></p>

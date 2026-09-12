@@ -8,6 +8,7 @@ import { Player }        from './game/player.js';
 import { Enemies, TYPES } from './game/enemies.js';
 import { Armory } from './game/armory.js';
 import { StoreTutorial } from './game/store-tutorial.js';
+import { platform, storage } from './core/platform.js';
 import { Weapon, GUNS }  from './game/weapons.js';
 import { Pickups }       from './game/pickups.js';
 import { Fx }            from './game/fx.js';
@@ -21,9 +22,10 @@ import { Vault }         from './game/vault.js';
 import { buildArena, ARENA_R } from './game/arena.js';
 import { Endless }       from './game/endless.js';
 import { Zones }         from './ui/zones.js';
+import { Grenades, NadeStock, blastCenter, BLAST_R, THROW_RANGE } from './game/grenade.js';
 
 // Opt-in local playtest loadout. Normal progression is the default.
-const POWER_TEST = ['localhost', '127.0.0.1', '::1', ''].includes(location.hostname)
+const POWER_TEST = ['localhost', '127.0.0.1', '::1'].includes(location.hostname)
   && new URLSearchParams(location.search).has('power')
   && !new URLSearchParams(location.search).has('normal');
 let assistedRun = POWER_TEST;
@@ -109,6 +111,11 @@ function applyPowerBuffs(){
   player.speedMul = 1.25;
 }
 
+/* Tell the portal we are loading before anything heavy starts, so its measure
+   of our load time is the real one. Harmless with no portal. */
+platform.init();
+platform.loadingStart();
+
 const engine  = new Engine(document.getElementById('c'));
 const input   = new Input(engine.canvas, document.getElementById('stick'));
 const hud     = new Hud(engine);
@@ -117,10 +124,14 @@ const revealGame = () => {
   if (bootStarted) return;
   bootStarted = true;
   hud.ready();
+  platform.loadingStop();
 };
 const story = new Story(({ firstRun }) => {
   if (firstRun) revealGame();
 });
+/* Straight into floor 1; the story is one tap away on the STORY button, and a
+   first-time player gets told so once, after the opening beat. */
+if (story.firstTime) setTimeout(() => hud.toast('TAP STORY (TOP LEFT) FOR THE BACKSTORY', 4200), 2600);
 
 const lights  = buildLighting(engine.scene);
 engine.key    = lights.key;
@@ -128,6 +139,10 @@ engine.onQualityChange = (q, fps) => console.info(`[verdant] ${fps}fps — quali
 
 const fx      = new Fx(engine.scene);
 const guide   = new ExitGuide(engine.scene);
+const grenades = new Grenades(engine.scene);
+const nades = new NadeStock();
+const aim = { on: false, mode: null, pointerId: null, pointer: null, from: null, moved: false, t: 0, mouse: false };
+let mouse = null;                                     // last mouse position, desktop only
 const boss    = new Boss(engine.scene);
 const player  = new Player(engine.scene);
 const enemies = new Enemies(engine.scene);
@@ -170,6 +185,11 @@ function applyPerks(newFloor){
      usable immediately without waiting for the next floor. */
   if (newFloor) state.run.revives = vault.revives;
   hud.setRevives(state.run.revives);
+  /* Grenades belong to the floor: a new floor empties the pouch, a retry of
+     the same floor keeps what you bought, and both reset the two throws. The
+     pit is one long 'floor' whose throws reset every wave (onWaveClear). */
+  if (newFloor){ nades.enterFloor(state.mode === 'endless' ? 'pit' : state.module); grenades.clear(); cancelAim(); }
+  updateNadeHud();
 }
 document.getElementById('story-replay').addEventListener('click', e => {
   e.stopPropagation();
@@ -190,13 +210,13 @@ armory.onOpen = station => {
   shopCamera.target.set(station.x + 2.4, 3.5, station.z + 7.2);
   shopAim.set(station.x, -.25, station.z - .45); shopTime = 0;
   player.body.visible = true;
-  room.store.label.visible = false;
+  if (room.store.label) room.store.label.visible = false;
   player.facing = .2; player.body.rotation.y = .2;
   document.getElementById('hud').classList.add('shopping');
   document.getElementById('store-progress').hidden = true;
 };
 armory.onClose = () => {
-  room.store.label.visible = true;
+  if (room.store.label) room.store.label.visible = true;
   engine.camera.position.copy(shopCamera.position); engine.camera.quaternion.copy(shopCamera.rotation);
   document.getElementById('hud').classList.remove('shopping');
 };
@@ -309,6 +329,7 @@ function restartRun(){
   floorUpgrades.permanent = false;
   floorUpgrades.reset();
   armory.resetRun();
+  nades.reset();
   if (POWER_TEST) applyPowerBuffs();
   guide.disarm();
   hud.setBoon(null);
@@ -345,12 +366,175 @@ function startModule(i){
   else updateMercyHud();
 }
 
+/* ------------------------------------------------------------ grenades --
+   Bought at the Armory for the floor you are on, two throws per floor at
+   most (see NadeStock). You choose where it lands:
+     - phone: drag from the orange button and let go on the spot; or tap the
+       button, then tap the floor. Tapping the button a second time throws at
+       the thickest crowd. Dragging back onto the button cancels.
+     - desktop: hold G (or Space) — the ring follows the mouse — and let go.
+   While aiming, time runs at 30% for a few seconds so a phone player can aim
+   in the middle of a surround. */
+function updateNadeHud(){
+  const btn = document.getElementById('nade-btn');
+  if (!btn) return;
+  // shown once you've bought some this floor; stays (greyed) after the last throw
+  btn.hidden = !(nades.stock > 0 || nades.uses > 0);
+  document.getElementById('nade-count').textContent = nades.stock;
+  btn.classList.toggle('empty', !nades.canThrow);
+  btn.classList.toggle('aiming', aim.on);
+}
+
+const aimRay = new THREE.Raycaster(), aimNdc = new THREE.Vector2();
+const aimGround = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), aimHit = new THREE.Vector3();
+addEventListener('pointermove', e => {
+  if (e.pointerType === 'mouse') mouse = { x: e.clientX, y: e.clientY };
+}, { passive: true });
+
+function canThrowNow(){
+  return nades.canThrow && state.phase === 'fight' && !state.upgradeIn &&
+    !armory.paused && !floorUpgrades.paused && !zones.paused && !story.active;
+}
+function groundAt(sx, sy){
+  aimNdc.set(sx / innerWidth * 2 - 1, -(sy / innerHeight) * 2 + 1);
+  aimRay.setFromCamera(aimNdc, engine.camera);
+  return aimRay.ray.intersectPlane(aimGround, aimHit) ? { x: aimHit.x, z: aimHit.z } : null;
+}
+/** Within throwing reach of the player, and inside the room. What the ring
+    shows is exactly where it will land. */
+function clampThrow(p){
+  const to = { x: p.x, z: p.z };
+  const dx = to.x - player.pos.x, dz = to.z - player.pos.z, d = Math.hypot(dx, dz);
+  if (d > THROW_RANGE){ to.x = player.pos.x + dx / d * THROW_RANGE; to.z = player.pos.z + dz / d * THROW_RANGE; }
+  const b = room.bounds;
+  to.x = Math.max(-b.x + 0.5, Math.min(b.x - 0.5, to.x));
+  to.z = Math.max(-b.z + 0.5, Math.min(b.z - 0.5, to.z));
+  if (b.r){ const r = Math.hypot(to.x, to.z); if (r > b.r - 0.5){ to.x *= (b.r - 0.5) / r; to.z *= (b.r - 0.5) / r; } }
+  return to;
+}
+/** The quick option: the thickest crowd in reach, or a few metres ahead. */
+function autoTarget(){
+  const targets = enemies.list.slice();
+  if (state.bossFight && boss.alive) targets.push(boss);
+  return blastCenter(targets, player.pos, THROW_RANGE) ||
+    { x: player.pos.x + Math.sin(player.facing) * 6, z: player.pos.z + Math.cos(player.facing) * 6 };
+}
+function aimPoint(){
+  const p = aim.pointer ? groundAt(aim.pointer.x, aim.pointer.y)
+    : (aim.mode === 'key' || aim.mouse) && mouse ? groundAt(mouse.x, mouse.y) : null;
+  return clampThrow(p || autoTarget());
+}
+function startAim(mode, pointerId = null, from = null, isMouse = false){
+  if (aim.on || !canThrowNow()) return false;
+  Object.assign(aim, { on: true, mode, pointerId, pointer: null, from, moved: false, t: 0, mouse: isMouse });
+  audio.tap?.();
+  updateNadeHud();
+  return true;
+}
+function cancelAim(){
+  if (!aim.on) return;
+  aim.on = false; aim.pointerId = null;
+  grenades.hideAim();
+  updateNadeHud();
+}
+function releaseAim(to = aimPoint()){
+  cancelAim();
+  if (!canThrowNow() || !nades.use()) return false;
+  if (!grenades.throw(player.pos, to)){ nades.stock++; nades.uses--; return false; }
+  audio.toss();
+  updateNadeHud();
+  return true;
+}
+/** Per frame while aiming: keep the ring on the target, drop it if the fight stops. */
+function updateAim(){
+  if (!aim.on) return;
+  if (!canThrowNow()){ cancelAim(); return; }
+  grenades.showAim(player.pos, aimPoint(), t);
+}
+/** Time runs slow while aiming, for a few seconds — then normal again, so
+    aiming can't be used to pause the fight. */
+function aimSlow(raw){
+  if (!aim.on) return 1;
+  aim.t += raw;
+  return aim.t < 2.5 ? 0.3 : Math.min(1, 0.3 + (aim.t - 2.5) * 0.7);
+}
+// the old name, kept for the test harness: throw straight at the crowd
+function throwGrenade(){ return canThrowNow() ? releaseAim(clampThrow(autoTarget())) : false; }
+
+{
+  const btn = document.getElementById('nade-btn');
+  const overBtn = e => { const r = btn.getBoundingClientRect(); return e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom; };
+  btn?.addEventListener('pointerdown', e => {
+    e.preventDefault(); e.stopPropagation();
+    audio.init();
+    // second tap while waiting for a target: throw at the crowd
+    if (aim.on && aim.mode === 'tap'){ releaseAim(clampThrow(autoTarget())); return; }
+    if (!startAim('drag', e.pointerId, { x: e.clientX, y: e.clientY }, e.pointerType === 'mouse')) return;
+    try { btn.setPointerCapture(e.pointerId); } catch {}
+  });
+  btn?.addEventListener('pointermove', e => {
+    if (!aim.on || aim.mode !== 'drag' || e.pointerId !== aim.pointerId) return;
+    if (!aim.moved && Math.hypot(e.clientX - aim.from.x, e.clientY - aim.from.y) < 18) return;
+    aim.moved = true;
+    // the ring sits a little above the finger so the finger doesn't hide it
+    aim.pointer = { x: e.clientX, y: e.clientY - (e.pointerType === 'mouse' ? 0 : 36) };
+  });
+  const up = e => {
+    if (!aim.on || aim.mode !== 'drag' || e.pointerId !== aim.pointerId) return;
+    if (!aim.moved){ aim.mode = 'tap'; aim.pointerId = null; return; }   // a tap: now pick the spot
+    if (overBtn(e) || e.type === 'pointercancel'){ cancelAim(); return; } // dragged back home: cancel
+    releaseAim();
+  };
+  btn?.addEventListener('pointerup', up);
+  btn?.addEventListener('pointercancel', up);
+  btn?.addEventListener('click', e => e.stopPropagation());
+  // in tap mode the next tap on the floor is the target — it must not become
+  // the movement stick, so catch it before the canvas does
+  addEventListener('pointerdown', e => {
+    if (!aim.on || aim.mode !== 'tap' || e.target !== engine.renderer.domElement) return;
+    e.stopImmediatePropagation(); e.preventDefault();
+    aim.pointer = { x: e.clientX, y: e.clientY };
+    releaseAim();
+  }, true);
+  addEventListener('contextmenu', e => { if (aim.on){ e.preventDefault(); cancelAim(); } });
+}
+
+/* Scaled to the floor (or wave) so it stays a panic button all the way up:
+   it clears a crowd of ordinary growth outright and badly hurts an elite. */
+function explodeGrenade(at){
+  const E = state.mode === 'endless';
+  const scale = E ? (endless.spec ? endless.spec.hpScale : 1) : floorHpScale(state.module, Math.max(0, state.activeRoom));
+  const dmg = 12 * scale;
+  for (const e of enemies.list){
+    if (!e.alive) continue;
+    const dx = e.pos.x - at.x, dz = e.pos.z - at.z, d = Math.hypot(dx, dz);
+    if (d > BLAST_R + e.def.radius) continue;
+    const fall = d < BLAST_R * 0.6 ? 1 : 0.55;           // full in the middle, half at the edge
+    const nx = dx / (d || 1), nz = dz / (d || 1);
+    enemies.hit(e, dmg * fall, nx, nz, fx);
+    if (e.alive && !e.def.rooted){ e.vel.x += nx * 9; e.vel.z += nz * 9; }
+  }
+  if (state.bossFight && boss.alive && Math.hypot(boss.pos.x - at.x, boss.pos.z - at.z) < BLAST_R + boss.def.radius)
+    boss.takeHit(E ? 45 * (1 + Math.max(0, endless.wave / 10 - 1) * 0.5) : 45, fx);
+  fx.ring({ x: at.x, y: 0.1, z: at.z }, { color: 0xffb066, from: 0.4, to: BLAST_R * 2.1, life: 0.45 });
+  fx.ring({ x: at.x, y: 0.1, z: at.z }, { color: 0xffffff, from: 0.2, to: BLAST_R * 1.2, life: 0.22 });
+  fx.burst({ x: at.x, y: 0.5, z: at.z }, { count: 34, color: 0xff8c42, speed: 11, size: 0.2, life: 0.7, up: 7, grav: 9 });
+  fx.burst({ x: at.x, y: 0.5, z: at.z }, { count: 16, color: 0xfff1c2, speed: 6, size: 0.26, life: 0.4, up: 4 });
+  engine.addShake(0.36);
+  state.hitStop = Math.max(state.hitStop, 0.06);
+  audio.boom();
+  if (E) room.pulse?.();                                   // the pit's floor ripples with it
+}
+
+armory.nades = nades;
+armory.onGrenade = () => updateNadeHud();
+
 /* ------------------------------------------------------ the endless pit --
    A second zone next to the tower: one round arena, waves until you fall.
    It borrows the whole combat loop (fight() branches on state.mode where the
    two differ) and swaps the room for buildArena(), the floor budget for the
    Endless wave director, and the floor header for a wave readout. */
-const endless = new Endless();
+const endless = new Endless(storage);
 let towerResume = null;          // where the tower run was when you left for the pit
 
 const zones = new Zones({ onPick: (zone) => (zone === 'endless' ? enterEndless() : leaveEndless()) });
@@ -482,6 +666,8 @@ function onWaveClear(){
   hud.toast(`WAVE ${n} CLEARED · +${bonus} COINS`, 2200);
   audio.clear();
   room.pulse();
+  nades.enterFloor('pit');                 // two fresh throws for the next wave
+  updateNadeHud();
   if (endless.upgradeDue) state.upgradeIn = { t: 1.1, unlock: () => {} };
 }
 
@@ -781,6 +967,7 @@ function fight(dt){
 
   const kills = weapon.update(dt, player, enemies, fx, engine, room.bounds, room.colliders);
   if (kills) state.hitStop = 0.05;
+  for (const blast of grenades.update(dt)) explodeGrenade(blast);
 
   // Enemies elsewhere on the floor head for the doorway that leads toward the
   // player, instead of grinding into whatever wall is between them.
@@ -955,6 +1142,7 @@ function transition(dt, dir){
         state.phase = 'escaped'; state.phaseT = 0;
         state.run.floors++;
         hud.toast('TOWER ESCAPED — EXTRACTION COMPLETE', 3200);
+        platform.happytime();            // 20 floors: the one moment that earns it
         return;
       }
       state.run.floors++;
@@ -993,6 +1181,7 @@ function transition(dt, dir){
       hud.showEndlessOver({
         wave: endless.wave, best: endless.best, newBest: state.newBest,
         kills: state.run.kills, seconds: state.run.t, coins: state.run.coins, gems: state.run.gems,
+        assisted: POWER_TEST,
       }, () => restartEndless(), () => leaveEndless());
     }
     return;
@@ -1047,7 +1236,11 @@ engine.follow(player.pos, player.vel, 1);
    between a playable game and nothing. */
 if (new URLSearchParams(location.search).has('nopost')) engine.setPost(false);
 
-const DEV_HOST = ['localhost', '127.0.0.1', '::1', ''].includes(location.hostname);
+/* Dev jumps and the playtest loadout are for a dev server only. An empty
+   hostname means file:// — a downloaded build opened straight from disk — and
+   used to count as dev, which handed every such player floor-skipping and the
+   assist loadout. */
+const DEV_HOST = ['localhost', '127.0.0.1', '::1'].includes(location.hostname);
 if (DEV_HOST){
   const q = new URLSearchParams(location.search);
   const wantsBoss = q.has('boss');
@@ -1111,6 +1304,10 @@ let frames = 0;                     // read by the boot watchdog in index.html
    the only way to test the game when the host throttles requestAnimationFrame. */
 function tick(raw, render = true){
   frames++;
+  /* The portal must know when the fight is actually live — it is what keeps an
+     ad from landing in the middle of one. Every early return below is a pause. */
+  platform.setPlaying(state.phase === 'fight' && !story.active
+    && !floorUpgrades.paused && !zones.paused && !armory.paused);
   if (story.active){
     if (render) engine.render(t, 0);
     return;
@@ -1131,6 +1328,7 @@ function tick(raw, render = true){
 
   let dt = raw;
   if (state.hitStop > 0){ state.hitStop -= raw; dt = raw * 0.08; }
+  dt *= aimSlow(raw);
 
   const dir = input.read();
   if (input.used) hud.hideHint();
@@ -1142,7 +1340,9 @@ function tick(raw, render = true){
     state.run.t += raw;
     fight(dt);
     player.update(dt, dir, room.bounds, room.colliders);
+    updateAim();
   } else {
+    cancelAim();
     // a speedrun clock that stops between rooms can be gamed by dawdling there
     if (state.phase === 'exit' || state.phase === 'enter') state.run.t += raw;
     transition(raw, dir);
@@ -1163,10 +1363,17 @@ function tick(raw, render = true){
   if (render) engine.render(t, raw);
 }
 
+addEventListener('keyup', e => {
+  if ((e.code === 'KeyG' || e.code === 'Space') && aim.on && aim.mode === 'key') releaseAim();
+});
 addEventListener('keydown', e => {
   if (e.code === 'KeyB' && !e.repeat){ armory.paused ? armory.close() : armory.hintStore(); }
   if (e.code === 'KeyM') hud.setMuted(!audio.toggle());
   if (e.code === 'KeyZ' && !e.repeat){ zones.paused ? zones.close() : openZones(); }
+  if (e.code === 'KeyG' || e.code === 'Space'){
+    if (aim.on || startAim('key')) e.preventDefault();
+  }
+  if (e.code === 'Escape' && aim.on){ e.preventDefault(); cancelAim(); }
   if (e.code === 'KeyP') hud.togglePerf();
   if (e.code === 'BracketRight') engine.setQuality(Math.min(3, engine.quality + 1));
   if (e.code === 'BracketLeft')  engine.setQuality(Math.max(0, engine.quality - 1));
@@ -1180,7 +1387,7 @@ requestAnimationFrame(() => requestAnimationFrame(() => {
 window.VERDANT = {
   engine, input, player, enemies, weapon, loot, gems, vault, fx, guide, boss, hud, state, tick, audio, armory, story, storeTutorial, floorUpgrades,
   MODULES, startModule, restartRun, THREE,
-  endless, zones, enterEndless, leaveEndless, restartEndless,
+  endless, zones, enterEndless, leaveEndless, restartEndless, grenades, nades, platform, storage, throwGrenade, aim, startAim, releaseAim, cancelAim, aimPoint,
   get frames(){ return frames; },
   get room(){ return room; }
 };

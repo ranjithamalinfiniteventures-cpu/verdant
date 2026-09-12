@@ -7,7 +7,10 @@ const armorySource = readFileSync(new URL('../src/game/armory.js', import.meta.u
 const storage = new Map();
 const elements = new Map();
 const element = () => ({ textContent:'', innerHTML:'', open:false, addEventListener(){}, focus(){}, showModal(){this.open=true},close(){this.open=false} });
-const context = vm.createContext({gunIllustration(){return ''},document:{getElementById(id){if(!elements.has(id))elements.set(id,element());return elements.get(id)}},localStorage:{getItem(k){return storage.get(k) ?? null},setItem(k,v){storage.set(k,v)}}});
+// armory.js saves through the platform storage shim (src/core/platform.js), so
+// that is what the sandbox has to provide — localStorage is no longer touched.
+const store = {getItem(k){return storage.get(k) ?? null},setItem(k,v){storage.set(k,String(v))},removeItem(k){storage.delete(k)}};
+const context = vm.createContext({gunIllustration(){return ''},document:{getElementById(id){if(!elements.has(id))elements.set(id,element());return elements.get(id)}},storage:store,localStorage:store});
 vm.runInContext(definitions + armorySource + '\nglobalThis.Armory = Armory; globalThis.GUNS=GUNS;', context);
 const color = () => ({set(){}});
 const player = {equipGun(){},pos:{x:0,z:0},gun:{material:{color:color()}},muzzle:{material:{emissive:color()}},mats:[],vel:{x:0,z:0,set(){}}};
