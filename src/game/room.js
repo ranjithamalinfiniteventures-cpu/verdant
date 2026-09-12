@@ -137,8 +137,12 @@ export function buildRoom(scene, cfg = {}){
   const placed = [];                 // props we are allowed to remove to fix a blocked path
   let group = null;                  // the prop currently being built
 
-  const solid = (x, z, w, d) => {
-    const c = { x, z, hw: w/2, hd: d/2 };
+  /* `blocksShots` is for walls only. Props (crates, machines, pipes) stay
+     shoot-through on purpose: they are chest height, the camera looks down over
+     them, and making every prop stop a bullet would change every floor's
+     difficulty at once. */
+  const solid = (x, z, w, d, blocksShots = false) => {
+    const c = { x, z, hw: w/2, hd: d/2, blocksShots };
     colliders.push(c);
     if (group) group.colliders.push(c);
     return c;
@@ -276,7 +280,7 @@ export function buildRoom(scene, cfg = {}){
     } else {
       add(rbox(w2, h, d2, 0.08), wallMat, cx, h / 2, cz);
     }
-    solid(cx, cz, w2, d2);
+    solid(cx, cz, w2, d2, true);            // a wall stops bullets
     // record the height actually built, not the height requested: the skirting
     // and cove hang off this, and a low wall that reports 3.2 m leaves its light
     // strip floating in mid-air where the full-height wall used to be

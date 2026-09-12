@@ -34,6 +34,40 @@ const FEEL = {
 };
 const feelOf = id => FEEL[id] || FEEL.laser;
 
+/* Does a wall stand between these two points? A 2D slab clip per collider,
+   written without allocating: it runs for a handful of candidate targets every
+   frame. Only colliders flagged `blocksShots` (walls) count. */
+export function shotBlocked(colliders, x0, z0, x1, z1){
+  const dx = x1 - x0, dz = z1 - z0;
+  for (let i = 0; i < colliders.length; i++){
+    const c = colliders[i];
+    if (!c.blocksShots) continue;
+    let t0 = 0, t1 = 1;
+    // x slab
+    if (Math.abs(dx) < 1e-6){
+      if (x0 < c.x - c.hw || x0 > c.x + c.hw) continue;
+    } else {
+      let ta = (c.x - c.hw - x0) / dx, tb = (c.x + c.hw - x0) / dx;
+      if (ta > tb){ const t = ta; ta = tb; tb = t; }
+      if (ta > t0) t0 = ta;
+      if (tb < t1) t1 = tb;
+      if (t0 > t1) continue;
+    }
+    // z slab
+    if (Math.abs(dz) < 1e-6){
+      if (z0 < c.z - c.hd || z0 > c.z + c.hd) continue;
+    } else {
+      let ta = (c.z - c.hd - z0) / dz, tb = (c.z + c.hd - z0) / dz;
+      if (ta > tb){ const t = ta; ta = tb; tb = t; }
+      if (ta > t0) t0 = ta;
+      if (tb < t1) t1 = tb;
+      if (t0 > t1) continue;
+    }
+    return true;
+  }
+  return false;
+}
+
 /* Auto-fire: the player never aims. The weapon picks the nearest target in range
    and the character turns to face it, which is what frees the whole input budget
    for movement. */
@@ -178,7 +212,12 @@ export class Weapon {
     this.cd -= dt;
     this.flash.intensity *= Math.pow(0.0005, dt);
 
-    const target = enemies.nearest(player.pos, S.range);
+    /* Prefer something we can actually hit. Without this, a wall between you
+       and the nearest growth means standing there shooting the wall while it
+       walks around; the fallback keeps the gun firing when nothing is clear,
+       because a silent gun reads as a broken one. */
+    const target = enemies.nearest(player.pos, S.range,
+      e => !shotBlocked(colliders, player.pos.x, player.pos.z, e.pos.x, e.pos.z));
     player.aim = target ? target.pos : null;
 
     if (target && this.cd <= 0){
@@ -229,7 +268,7 @@ export class Weapon {
 
       for (let s = 0; s < steps && !dead; s++){
         b.pos.addScaledVector(b.dir, step);
-        if(colliders.some(c => c.partition && Math.abs(b.pos.x-c.x)<c.hw+.08 && Math.abs(b.pos.z-c.z)<c.hd+.08)){dead=true;break;}
+        if(colliders.some(c => c.blocksShots && Math.abs(b.pos.x-c.x)<c.hw+.08 && Math.abs(b.pos.z-c.z)<c.hd+.08)){dead=true;break;}
 
         for (const e of enemies.list){
           if (!e.alive || b.hit.has(e)) continue;

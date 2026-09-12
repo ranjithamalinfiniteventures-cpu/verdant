@@ -502,12 +502,18 @@ export class Enemies {
     for (const p of Object.values(this.pools)){ p.dirty = true; p.flush(); }
   }
 
-  nearest(pos, maxDist){
+  /** @param {(e:object)=>boolean} [visible] prefer targets this returns true
+      for; the nearest blocked one is used only when nothing is in the clear. */
+  nearest(pos, maxDist, visible){
     let best = null, bd = maxDist * maxDist;
+    let blocked = null, bdBlocked = maxDist * maxDist;
     for (const e of this.list){
       if (!e.alive) continue;
       const dx = e.pos.x - pos.x, dz = e.pos.z - pos.z;
       const d = dx*dx + dz*dz;
+      // visibility decides first: folding it into the distance test let a
+      // blocked target fall through and be treated as if it were in the clear
+      if (visible && !visible(e)){ if (d < bdBlocked){ bdBlocked = d; blocked = e; } continue; }
       if (d < bd){ bd = d; best = e; }
     }
     /* Targets that are not pooled instances — currently just the boss. Kept in a
@@ -516,8 +522,11 @@ export class Enemies {
       if (!e.alive) continue;
       const dx = e.pos.x - pos.x, dz = e.pos.z - pos.z;
       const d = dx*dx + dz*dz;
+      // visibility decides first: folding it into the distance test let a
+      // blocked target fall through and be treated as if it were in the clear
+      if (visible && !visible(e)){ if (d < bdBlocked){ bdBlocked = d; blocked = e; } continue; }
       if (d < bd){ bd = d; best = e; }
     }
-    return best;
+    return best || blocked;
   }
 }
