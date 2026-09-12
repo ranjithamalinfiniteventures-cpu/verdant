@@ -117,6 +117,8 @@ function applyPowerBuffs(){
    of our load time is the real one. Harmless with no portal. */
 platform.init();
 platform.loadingStart();
+// a portal mute (an ad, or the site's own mute) beats our ♪ button
+platform.onSettings(s => audio.setPlatformMute(!!s.muteAudio));
 
 const engine  = new Engine(document.getElementById('c'));
 const input   = new Input(engine.canvas, document.getElementById('stick'));

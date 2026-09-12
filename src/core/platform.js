@@ -110,6 +110,22 @@ export const platform = {
   /** A real moment — a boss falling, a tower escaped. Rare, by instruction. */
   happytime(){ gameEvent('happytime'); },
 
+  /* The portal can ask a game to go quiet — during an ad, or because the player
+     muted the whole site. Read it once at start, then follow it. The callback
+     also fires immediately with the current value, so the caller has one path.
+     `?muteAudio=true` forces it on locally, which is how this is tested. */
+  onSettings(cb){
+    const read = () => { try { return sdk()?.game?.settings || {}; } catch { return {}; } };
+    const push = (s) => { try { cb(s || read()); } catch {} };
+    push(read());
+    try { sdk()?.game?.addSettingsChangeListener?.(push); } catch {}
+    // the SDK may only arrive later; re-read once it has
+    Promise.resolve(initializing).then(() => {
+      push(read());
+      try { sdk()?.game?.addSettingsChangeListener?.(push); } catch {}
+    }).catch(() => {});
+  },
+
   /* The signed-in player. Full Launch wants their CrazyGames name used rather
      than asking for another one; `null` means "ask the player", which is what
      happens everywhere else. */

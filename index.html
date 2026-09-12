@@ -429,6 +429,7 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
   transition:opacity .7s;z-index:20}
 #boot.gone{opacity:0;pointer-events:none}
 #boot div{text-align:center}
+#boot h1 .sub{display:block;font-size:.44em;letter-spacing:.42em;opacity:.72;margin-top:.35em}
 #boot h1{font-size:clamp(22px,4.2vmin,46px);letter-spacing:.42em;margin:0 0 calc(var(--u)*1.4);
   font-weight:800;color:#5fb6bf;text-indent:.42em}
 #boot p{font-size:calc(var(--u)*.85);letter-spacing:.26em;color:#4a6068;margin:0;font-weight:600}
@@ -1006,7 +1007,10 @@ canvas{display:block;width:100%;height:100%;touch-action:none}
     </div>
   </section>
   <div id="boot"><div>
-    <h1>VERDANT</h1>
+    <!-- The portal requires the submitted game name to match the title shown in
+         the game, so the boot screen carries the full name. The station itself
+         is still called Verdant in the fiction. -->
+    <h1>VERDANT<span class="sub">TOWER ESCAPE</span></h1>
     <p>STATION LINK ESTABLISHING</p>
     <div id="bar"><i></i></div>
   </div></div>

@@ -26,6 +26,7 @@ const note  = (deg, oct = 0) =>
 class AudioEngine {
   constructor(){
     this.ready = false;
+    this.platformMuted = false;   // set by the portal, see setPlatformMute
     this._rebuilds = 0;          // how many contexts we have replaced this session
     this.enabled = true;
     this.vol = { master: 0.85, sfx: 0.75, music: 0.24 };
@@ -54,7 +55,7 @@ class AudioEngine {
     this.ready = true;
 
     this.master = ctx.createGain();
-    this.master.gain.value = this.enabled ? this.vol.master : 0;
+    this.master.gain.value = this.audible ? this.vol.master : 0;
 
     // a gentle bus limiter so a wave of deaths never clips
     const lim = ctx.createDynamicsCompressor();
@@ -583,9 +584,21 @@ class AudioEngine {
   /* ------------------------------------------------------------ control -- */
   setEnabled(on){
     this.enabled = on;
-    if (this.ready) this.master.gain.setTargetAtTime(on ? this.vol.master : 0, this.ctx.currentTime, 0.05);
+    this._applyMaster();
     this._save();
     return on;
+  }
+  /* The portal can mute a game from outside — during an ad, or because the
+     player muted the whole site. That decision outranks our own toggle, so the
+     ♪ button cannot turn sound back on while it is set. */
+  setPlatformMute(on){
+    this.platformMuted = !!on;
+    this._applyMaster();
+  }
+  get audible(){ return this.enabled && !this.platformMuted; }
+  _applyMaster(){
+    if (!this.ready) return;
+    this.master.gain.setTargetAtTime(this.audible ? this.vol.master : 0, this.ctx.currentTime, 0.05);
   }
   toggle(){ this.init(); return this.setEnabled(!this.enabled); }
 
