@@ -273,6 +273,19 @@ storeTutorial.onComplete = () => {
   hud.toast('TRAINING COMPLETE · PRUNING LASER LV 2', 2600);
 };
 
+/* The tower is the game's progression, so a floor reached is a percentage
+   completed. Only ever reported upward and remembered across runs: restarting at
+   floor 1 does not mean the player un-learned 40% of the game. */
+const PROGRESS_KEY = 'verdant.progress.v1';
+let bestProgress = Number(storage.getItem(PROGRESS_KEY)) || 0;
+function reportProgress(pct){
+  const v = Math.max(0, Math.min(100, Math.round(pct)));
+  if (v <= bestProgress) return;
+  bestProgress = v;
+  try { storage.setItem(PROGRESS_KEY, String(v)); } catch {}
+  platform.reportProgress(v);
+}
+
 /* ------------------------------------------------------------- modules -- */
 function loadModule(i){
   /* Loading a tower floor IS being in the tower. Undo the pit here, once, so
@@ -335,6 +348,7 @@ function loadModule(i){
   hud.setShield(player.shield);
   guide.setFloor(room);
   hud.minimap.setFloor(room);
+  reportProgress(i / MODULES.length * 100);      // floors behind you, as a percentage
   hud.setModule(i, m.name, m.total);
   hud.setFloorRooms(state.zones,0,false);
   hud.setProgress(0);
@@ -1238,6 +1252,7 @@ function transition(dt, dir){
         state.run.floors++;
         hud.toast('TOWER ESCAPED — EXTRACTION COMPLETE', 3200);
         platform.happytime();            // 20 floors: the one moment that earns it
+        reportProgress(100);
         return;
       }
       state.run.floors++;

@@ -110,6 +110,13 @@ export const platform = {
   /** A real moment — a boss falling, a tower escaped. Rare, by instruction. */
   happytime(){ gameEvent('happytime'); },
 
+  /** How far through the game this player has got, 0-100. */
+  reportProgress(pct){
+    if (!ready) return;
+    const v = Math.max(0, Math.min(100, Math.round(pct)));
+    try { Promise.resolve(sdk()?.game?.reportGameCompletedPercentage?.(v)).catch(() => {}); } catch {}
+  },
+
   /* The portal can ask a game to go quiet — during an ad, or because the player
      muted the whole site. Read it once at start, then follow it. The callback
      also fires immediately with the current value, so the caller has one path.
