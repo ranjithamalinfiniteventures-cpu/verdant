@@ -329,9 +329,62 @@ class AudioEngine {
     this.tone({ freq: f * 2, type: 'sine', dur: 0.09, gain: 0.07, a: 0.002 });
   }
 
-  hurt(){
+  /* A grunt, synthesised like everything else here: a sawtooth standing in for
+     the vocal folds, shaped by two bandpass formants. F1 around 700Hz and F2
+     around 1150Hz is the "uh" vowel; the pitch falls through the sound, which
+     is what makes it read as a voice rather than a buzz. Every call jitters the
+     pitch, the formants and the length, because the one thing that would make a
+     hit sound worse than no voice is the same voice forty times a floor.
+     `strain` (0..1) tightens it as health drops — higher, thinner, shorter. */
+  _grunt(strain = 0){
+    if (!this.ready) return;
+    const ctx = this.ctx, t = ctx.currentTime;
+    const jitter = (v, amt) => v * (1 + (Math.random() * 2 - 1) * amt);
+    const f0 = jitter(116 + strain * 26, 0.07);
+    const dur = jitter(0.30 - strain * 0.07, 0.12);
+
+    const src = ctx.createOscillator();
+    src.type = 'sawtooth';
+    src.frequency.setValueAtTime(f0 * 1.06, t);
+    src.frequency.exponentialRampToValueAtTime(f0 * 0.78, t + dur);   // falling, like a real one
+
+    const out = ctx.createGain();
+    this._env(out, t, { a: 0.014, d: dur, peak: 0.34 + strain * 0.06 });
+    const pan = ctx.createStereoPanner(); pan.pan.value = (Math.random() - 0.5) * 0.3;
+
+    // the two formants that make the vowel
+    for (const [hz, q, level] of [[jitter(700 + strain * 90, 0.06), 9, 1], [jitter(1150 + strain * 120, 0.06), 11, 0.55]]){
+      const f = ctx.createBiquadFilter();
+      f.type = 'bandpass'; f.frequency.value = hz; f.Q.value = q;
+      const g = ctx.createGain(); g.gain.value = level;
+      src.connect(f).connect(g).connect(out);
+    }
+    // a little unfiltered body, or it sounds like a radio
+    const body = ctx.createBiquadFilter();
+    body.type = 'lowpass'; body.frequency.value = 320; body.Q.value = 0.7;
+    const bg = ctx.createGain(); bg.gain.value = 0.5;
+    src.connect(body).connect(bg).connect(out);
+
+    out.connect(pan).connect(this.sfxBus);
+    const vg = ctx.createGain(); vg.gain.value = 0.18;
+    pan.connect(vg).connect(this.sfxVerb);
+
+    src.start(t); src.stop(t + dur + 0.08);
+    src.onended = () => { try { src.disconnect(); out.disconnect(); pan.disconnect(); vg.disconnect(); } catch {} };
+    // breath on the front of it
+    this.noise({ dur: 0.07, gain: 0.10, type: 'bandpass', freq: 1400, q: 1.2 });
+  }
+
+  /** @param {number} hpLeft 0..1, so the voice tightens as the run gets worse */
+  hurt(hpLeft = 1){
     this.noise({ dur: 0.16, gain: 0.30, type: 'lowpass', freq: 900, sweep: 180, q: 2 });
     this.tone({ freq: 190, type: 'sawtooth', dur: 0.2, gain: 0.27, slide: 70, cutoff: 700, q: 4 });
+    /* One voice at a time. Without this, walking into a crowd stacks a dozen
+       grunts into a drone and the impact layer disappears underneath them. */
+    const now = this.ctx ? this.ctx.currentTime : 0;
+    if (now - (this._gruntAt || -1) < 0.34) return;
+    this._gruntAt = now;
+    this._grunt(clamp(1 - hpLeft, 0, 1));
   }
 
   dead(){

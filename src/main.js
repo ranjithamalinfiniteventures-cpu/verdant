@@ -1093,7 +1093,7 @@ function fight(dt){
       engine.addShake(0.12);
       hud.setShield(player.shield);
     } else {
-      audio.hurt();
+      audio.hurt(player.hp);          // the voice tightens as health drops
       engine.addShake(0.3);
       hud.setHp(player.hp);
       fx.ring(player.pos, { color: 0xff6b6b, from: 0.4, to: 2.2, life: 0.3 });
