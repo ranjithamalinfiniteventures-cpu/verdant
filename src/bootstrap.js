@@ -7,10 +7,22 @@ import { platform } from './core/platform.js';
    environment, including the portal's QA. */
 performance.mark('verdant:boot');
 
-// Saved progress must be available before armory, vault, story or audio read
-// it. Import the game only after the optional portal connection has settled.
+/* Saved progress must be available before armory, vault, story or audio read it,
+   so the game starts once the portal connection has settled — but that wait is
+   now capped hard (1.5s for the script, 2s for its handshake). It used to allow
+   ten seconds, which meant a slow portal could hold a game that is ready in
+   under a second, and the whole delay showed up as OUR load time.
+
+   The mark below records exactly how long the portal took, so the next time a
+   load looks slow the console says whether it was us or the wait. */
 window.VERDANT_BOOTING = true;
 platform.loadingStart();
-platform.init().then(() => import('./main.js')).catch(error => {
+const sdkStart = performance.now();
+platform.init().then(() => {
+  performance.mark('verdant:portal');
+  const waited = Math.round(performance.now() - sdkStart);
+  if (waited > 250) console.info(`[verdant] waited ${waited}ms for the portal SDK before starting`);
+  return import('./main.js');
+}).catch(error => {
   window.dispatchEvent(new ErrorEvent('error', { message: error.message, error }));
 }).finally(() => { window.VERDANT_BOOTING = false; });

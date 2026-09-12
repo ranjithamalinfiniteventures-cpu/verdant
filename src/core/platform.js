@@ -41,7 +41,7 @@ async function loadSdk(){
     script.dataset.optional = 'true';
     script.src = 'https://sdk.crazygames.com/crazygames-sdk-v3.js';
     script.async = true;
-    const timer = setTimeout(resolve, 5000);
+    const timer = setTimeout(resolve, 1500);     // the SDK is optional: never wait long for it
     script.onload = script.onerror = () => { clearTimeout(timer); resolve(); };
     document.head.appendChild(script);
   });
@@ -75,7 +75,7 @@ export const platform = {
            as a rejection the page's error reporter would otherwise show to the
            player. This is the check its own error message asks for. */
         if (s.environment === 'disabled'){ environment = 'disabled'; return false; }
-        await deadline(s.init(), 5000);
+        await deadline(s.init(), 2000);
         environment = s.environment || 'disabled';
         ready = environment === 'crazygames' || environment === 'local';
         if (ready && loadingStarted) gameEvent('loadingStart');
