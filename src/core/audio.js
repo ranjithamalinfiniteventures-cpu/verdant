@@ -7,7 +7,13 @@
 
 import { storage } from './platform.js';
 
-const MUSIC_ENABLED = false;
+/* The generative bed: a low drone that opens up as the room fills, with a
+   chord voicing drifting through every nine seconds or so. It has been off
+   since the first commit to save the oscillators, but a top-down shooter with
+   nothing under it reads as broken rather than as quiet — silence was reported
+   as a bug twice. It rides at 0.24 of master and the ♪ button still mutes
+   everything. */
+const MUSIC_ENABLED = true;
 
 const clamp = (v, a, b) => Math.min(Math.max(v, a), b);
 const rand  = (a, b) => a + Math.random() * (b - a);
@@ -78,9 +84,6 @@ class AudioEngine {
 
     this.noiseBuf = this._noise(1.0);
 
-    // Background music is off. Not muted — never started, so the drone
-    // oscillators, the LFO and the chord scheduler cost nothing. Flip
-    // MUSIC_ENABLED to bring it back.
     if (MUSIC_ENABLED) this._startMusic();
     this.resume();
   }
