@@ -22,7 +22,13 @@ import { audio } from '../core/audio.js';
    layer is a single extra draw call no matter how many beams are on screen. */
 
 const MAX_BEAMS   = 24;
-const TELEGRAPH   = 0.82;   // seconds a beam warns before it fires
+const TELEGRAPH   = 0.82;   // seconds a beam warns before it fires (phase 1)
+/* The warning shortens as Heartroot loses health. At a flat 0.82s with a 0.30s
+   lethal window and a second of rest between patterns, a player who simply kept
+   walking was never in danger — the fight lasted half a minute without ever
+   threatening. Phase 3 still warns for 0.58s, which is twice a human reaction
+   time, so it stays readable rather than cheap. */
+const TELEGRAPH_BY_PHASE = [0.82, 0.82, 0.70, 0.58];
 const FIRE_TIME   = 0.30;   // seconds it is actually lethal
 const FADE_TIME   = 0.20;
 const BEAM_LEN    = 40;     // long enough to cross any room on the floor
@@ -221,11 +227,11 @@ export class Boss {
 
     // RADIAL: a fan of fixed beams with safe gaps — read the gap, stand in it
     if (roll < 0.38){
-      const n = p === 1 ? 6 : p === 2 ? 8 : 10;
+      const n = p === 1 ? 6 : p === 2 ? 9 : 12;
       // offset so the gaps never land in the same place twice
       const off = Math.random() * Math.PI * 2;
       for (let i = 0; i < n; i++) this._fire(off + (i / n) * Math.PI * 2);
-      this.cd = TELEGRAPH + FIRE_TIME + (p === 3 ? 0.55 : 0.95);
+      this.cd = this.telegraph + FIRE_TIME + (p === 3 ? 0.3 : p === 2 ? 0.6 : 0.95);
       return 'radial';
     }
 
@@ -235,7 +241,7 @@ export class Boss {
       for (let i = 0; i < shots; i++){
         this._fire(toPlayer + (Math.random() - 0.5) * 0.5, i * 0.42, BEAM_HALF_W * 1.15);
       }
-      this.cd = TELEGRAPH + FIRE_TIME + shots * 0.42 + 0.5;
+      this.cd = this.telegraph + FIRE_TIME + shots * 0.42 + (p === 1 ? 0.5 : 0.28);
       return 'lance';
     }
 
@@ -245,7 +251,7 @@ export class Boss {
       t: 0,
       dur: p === 1 ? 3.0 : p === 2 ? 3.6 : 4.2,
       dir: Math.random() < 0.5 ? 1 : -1,
-      speed: p === 1 ? 0.85 : p === 2 ? 1.05 : 1.25,
+      speed: p === 1 ? 0.85 : p === 2 ? 1.15 : 1.45,
       base: toPlayer,
       arms,
     };
@@ -291,11 +297,11 @@ export class Boss {
       const b = this.beams[i];
       b.t += dt;
       if (b.t < 0) continue;
-      if (b.t < TELEGRAPH){
-        charging = Math.max(charging, b.t / TELEGRAPH);
+      if (b.t < this.telegraph){
+        charging = Math.max(charging, b.t / this.telegraph);
         continue;
       }
-      const ft = b.t - TELEGRAPH;
+      const ft = b.t - this.telegraph;
       if (ft <= FIRE_TIME){
         if (!b.dealt && this._hits(player, b.angle, b.width)){
           b.dealt = true;                     // one beam can only bite you once
@@ -321,6 +327,9 @@ export class Boss {
   }
 
   /** Contact damage scales with phase, but stays survivable — see main.js notes. */
+  /** How long a beam warns before it bites, by phase. */
+  get telegraph(){ return TELEGRAPH_BY_PHASE[this.phase] || TELEGRAPH; }
+
   get contactDamage(){ return this.phase === 3 ? 0.16 : this.phase === 2 ? 0.13 : 0.11; }
 
   /* How far a beam at `angle` travels before it meets the arena wall.
@@ -459,12 +468,12 @@ export class Boss {
 
     for (const b of this.beams){
       if (b.t < 0) continue;
-      if (b.t < TELEGRAPH){
+      if (b.t < this.telegraph){
         // the warning line thickens and brightens as the shot approaches
-        const k = b.t / TELEGRAPH;
+        const k = b.t / this.telegraph;
         put(b.angle, BEAM_HALF_W * (0.55 + k * 0.45), 0.10 + k * 0.55, false);
       } else {
-        const ft = b.t - TELEGRAPH;
+        const ft = b.t - this.telegraph;
         const k = ft <= FIRE_TIME ? 1 : 1 - (ft - FIRE_TIME) / FADE_TIME;
         put(b.angle, BEAM_HALF_W, 1.5 * Math.max(0, k), true);
       }
