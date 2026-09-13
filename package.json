@@ -9,6 +9,8 @@
   "scripts": {
     "dev": "python3 serve.py 5173",
     "build": "node tools/build.mjs",
+    "build:crazygames": "node tools/build.mjs --portal=crazygames",
+    "release": "node tools/build.mjs && node tools/build.mjs --portal=crazygames && rm -f verdant-web.zip verdant-crazygames.zip && (cd dist && zip -qr ../verdant-web.zip . -x '.*') && (cd dist-crazygames && zip -qr ../verdant-crazygames.zip . -x '.*')",
     "vendor": "node tools/vendor-three.mjs",
     "test": "for f in tests/*.test.mjs; do node \"$f\" || exit 1; done"
   },

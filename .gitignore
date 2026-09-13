@@ -7,3 +7,6 @@ verdant-crazygames.zip
 
 # generated character/enemy renders — rebuild with tools/turntable.html
 press/
+
+dist-crazygames/
+verdant-web.zip

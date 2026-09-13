@@ -14,7 +14,11 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const dist = join(root, 'dist');
+/* Two builds from one source. `web` (default) is for itch, Newgrounds and our
+   own site and makes no external requests; `crazygames` carries their SDK. */
+const portal = (process.argv.find(a => a.startsWith('--portal=')) || '--portal=web').split('=')[1];
+if (!['web', 'crazygames'].includes(portal)) throw new Error(`unknown portal "${portal}"`);
+const dist = join(root, portal === 'web' ? 'dist' : `dist-${portal}`);
 
 rmSync(dist, { recursive: true, force: true });
 mkdirSync(dist, { recursive: true });
@@ -28,6 +32,7 @@ const result = await build({
   // MIT and OFL both require their notices to travel with the code: keep the
   // @license blocks (three.js and friends) at the end of the bundle.
   legalComments: 'eof',
+  define: { __VERDANT_PORTAL__: JSON.stringify(portal) },
   outfile: join(dist, 'verdant.js'),
   alias: { 'three': join(root, 'node_modules/three/build/three.module.js') },
   plugins: [{
@@ -66,10 +71,16 @@ if (!/Three\.js Authors/.test(bundle)) throw new Error('three.js MIT notice miss
 for (const f of ['assets/fonts/OFL.txt', 'THIRD-PARTY.md'])
   if (!statSync(join(dist, f)).size) throw new Error(`${f} missing from dist`);
 
+// Enforce the difference rather than trusting it: a web build that still
+// mentions the portal SDK would put a third-party request on Newgrounds.
+const hasSdk = bundle.includes('sdk.crazygames.com');
+if (portal === 'web' && hasSdk) throw new Error('web build still references the CrazyGames SDK');
+if (portal === 'crazygames' && !hasSdk) throw new Error('crazygames build is missing its SDK');
+
 const kb = p => (statSync(p).size / 1024).toFixed(0) + ' KB';
-console.log('dist/index.html   ', kb(join(dist, 'index.html')));
-console.log('dist/verdant.js   ', kb(join(dist, 'verdant.js')));
-console.log('dist/assets/      ', 'fonts + art');
-console.log('\nZip the contents of dist/ and upload.');
-console.log('One external request: the CrazyGames SDK (gameplay events, sitelock,');
-console.log('storage, account name). It is optional — the game runs without it.');
+const rel = dist.slice(root.length + 1);
+console.log(`${rel}/index.html   `, kb(join(dist, 'index.html')));
+console.log(`${rel}/verdant.js   `, kb(join(dist, 'verdant.js')));
+console.log(portal === 'web'
+  ? '\nWeb build (itch, Newgrounds, own site): no external requests.'
+  : '\nCrazyGames build: loads their SDK for events, storage, mute and sitelock.');

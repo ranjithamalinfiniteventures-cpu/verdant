@@ -20,8 +20,17 @@
    Sitelock is done by the SDK itself on start; there is deliberately no
    hostname check here, because a wrong one breaks the game for real players.
 
-   When the SDK is absent — our own site, itch, a downloaded build, tests —
-   every call here quietly does nothing. */
+   When the SDK is absent — the web build, a downloaded build, tests — every
+   call here quietly does nothing. */
+
+/* Which portal this build is for, stamped in by tools/build.mjs. The generic
+   "web" build (itch, Newgrounds, our own site) must make no third-party
+   requests at all: Newgrounds' game guidelines require notice and an opt-out
+   for any call to a third-party server, and a competitor portal's SDK has no
+   business loading there anyway. So in that build the SDK URL is folded to an
+   empty string and the loader never runs. Unbundled dev keeps it, for testing. */
+const PORTAL = typeof __VERDANT_PORTAL__ === 'string' ? __VERDANT_PORTAL__ : 'dev';
+const SDK_URL = PORTAL === 'web' ? '' : 'https://sdk.crazygames.com/crazygames-sdk-v3.js';
 
 const sdk = () => globalThis.CrazyGames?.SDK || null;
 
@@ -34,12 +43,13 @@ function deadline(promise, ms){
 }
 
 async function loadSdk(){
+  if (!SDK_URL) return null;                     // the web build has no portal
   if (sdk() || typeof document === 'undefined') return sdk();
   await new Promise(resolve => {
     const script = document.createElement('script');
     script.id = 'crazygames-sdk';
     script.dataset.optional = 'true';
-    script.src = 'https://sdk.crazygames.com/crazygames-sdk-v3.js';
+    script.src = SDK_URL;
     script.async = true;
     const timer = setTimeout(resolve, 1500);     // the SDK is optional: never wait long for it
     script.onload = script.onerror = () => { clearTimeout(timer); resolve(); };
