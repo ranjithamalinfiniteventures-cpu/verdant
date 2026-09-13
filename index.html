@@ -101,7 +101,7 @@
      downloaded build, and it must never become an error in front of a player.
      The game has already fallen back to device saves by this point. */
   function optional(text) {
-    return /crazysdk|crazygames/i.test(String(text || ''));
+    return /crazysdk|crazygames|y8sdk|cdn\.y8\.com/i.test(String(text || ''));
   }
 
   window.addEventListener('unhandledrejection', function (e) {

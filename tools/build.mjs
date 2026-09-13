@@ -17,7 +17,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 /* Two builds from one source. `web` (default) is for itch, Newgrounds and our
    own site and makes no external requests; `crazygames` carries their SDK. */
 const portal = (process.argv.find(a => a.startsWith('--portal=')) || '--portal=web').split('=')[1];
-if (!['web', 'crazygames'].includes(portal)) throw new Error(`unknown portal "${portal}"`);
+if (!['web', 'crazygames', 'y8'].includes(portal)) throw new Error(`unknown portal "${portal}"`);
 const dist = join(root, portal === 'web' ? 'dist' : `dist-${portal}`);
 
 rmSync(dist, { recursive: true, force: true });
@@ -73,14 +73,18 @@ for (const f of ['assets/fonts/OFL.txt', 'THIRD-PARTY.md'])
 
 // Enforce the difference rather than trusting it: a web build that still
 // mentions the portal SDK would put a third-party request on Newgrounds.
-const hasSdk = bundle.includes('sdk.crazygames.com');
-if (portal === 'web' && hasSdk) throw new Error('web build still references the CrazyGames SDK');
-if (portal === 'crazygames' && !hasSdk) throw new Error('crazygames build is missing its SDK');
+const sdks = { crazygames: bundle.includes('sdk.crazygames.com'), y8: bundle.includes('cdn.y8.com') };
+for (const [name, present] of Object.entries(sdks)){
+  if (name === portal && !present) throw new Error(`${portal} build is missing its SDK`);
+  if (name !== portal && present) throw new Error(`${portal} build still references the ${name} SDK`);
+}
 
 const kb = p => (statSync(p).size / 1024).toFixed(0) + ' KB';
 const rel = dist.slice(root.length + 1);
 console.log(`${rel}/index.html   `, kb(join(dist, 'index.html')));
 console.log(`${rel}/verdant.js   `, kb(join(dist, 'verdant.js')));
-console.log(portal === 'web'
-  ? '\nWeb build (itch, Newgrounds, own site): no external requests.'
-  : '\nCrazyGames build: loads their SDK for events, storage, mute and sitelock.');
+console.log({
+  web: '\nWeb build (itch, GameFlare, own site): no external requests.',
+  crazygames: '\nCrazyGames build: loads their SDK for events, storage, mute and sitelock.',
+  y8: '\nY8 build: loads and initialises the Y8 SDK. No ads.',
+}[portal]);

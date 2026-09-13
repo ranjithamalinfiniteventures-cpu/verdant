@@ -30,7 +30,43 @@
    business loading there anyway. So in that build the SDK URL is folded to an
    empty string and the loader never runs. Unbundled dev keeps it, for testing. */
 const PORTAL = typeof __VERDANT_PORTAL__ === 'string' ? __VERDANT_PORTAL__ : 'dev';
-const SDK_URL = PORTAL === 'web' ? '' : 'https://sdk.crazygames.com/crazygames-sdk-v3.js';
+/* The URLs compare the injected literal directly rather than going through
+   PORTAL. esbuild can wrap this module in a lazy initialiser, which turns
+   top-level consts into plain assignments it will not fold — so a comparison
+   via PORTAL survived into the CrazyGames bundle and shipped the Y8 URL with it.
+   A literal compared in place always folds, however the module is wrapped. */
+const SDK_URL = (typeof __VERDANT_PORTAL__ === 'undefined' || __VERDANT_PORTAL__ === 'crazygames')
+  ? 'https://sdk.crazygames.com/crazygames-sdk-v3.js' : '';
+/* Y8 requires its SDK to be initialised to publish at all, though ads are
+   optional and this build has none. Its app id is a public client identifier
+   (it ships in every Y8 game's page source), not a secret. */
+const Y8_URL = (typeof __VERDANT_PORTAL__ !== 'undefined' && __VERDANT_PORTAL__ === 'y8')
+  ? 'https://cdn.y8.com/minimal-sdk/2-0/y8.min.js' : '';
+const Y8_APP_ID = '6aa61bf60c9b919e9245296c';
+
+/** Load and initialise Y8's SDK, never waiting more than ~2.5s for it. */
+function initY8(){
+  if (!Y8_URL || typeof document === 'undefined') return Promise.resolve(false);
+  return new Promise(resolve => {
+    let settled = false;
+    const done = ok => { if (!settled){ settled = true; resolve(ok); } };
+    const timer = setTimeout(() => done(false), 2500);
+    addEventListener('y8sdk.ready', () => {
+      try {
+        const y8sdk = globalThis.y8?.sdk?.();
+        // appConfig only: no adConfig, so no ads are requested
+        y8sdk?.init({ appId: Y8_APP_ID, autoLogin: true });
+        y8sdk?.onAuth?.(() => {});
+        clearTimeout(timer); done(!!y8sdk);
+      } catch (e){ clearTimeout(timer); console.warn('[verdant] Y8 SDK unavailable:', e?.message || e); done(false); }
+    }, { once: true });
+    const script = document.createElement('script');
+    script.src = Y8_URL; script.async = true; script.dataset.optional = 'true';
+    script.onload = () => { try { globalThis.y8?.emitReadyEvent?.(); } catch {} };
+    script.onerror = () => { clearTimeout(timer); done(false); };
+    document.head.appendChild(script);
+  });
+}
 
 const sdk = () => globalThis.CrazyGames?.SDK || null;
 
@@ -77,6 +113,7 @@ export const platform = {
   init(){
     if (initializing) return initializing;
     initializing = (async () => {
+      if (PORTAL === 'y8'){ await initY8(); return false; }   // no CrazyGames features on Y8
       const s = await loadSdk();
       if (!s) return false;
       try {
