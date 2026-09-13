@@ -89,7 +89,15 @@
   window.addEventListener('error', function (e) {
     if (e && e.target && e.target.tagName === 'SCRIPT') {
       if (e.target.getAttribute('data-optional') === 'true') return;
-      return show('A script failed to load', (e.target.src || 'inline script'));
+      /* Only our own scripts can break the game. Hosts inject their own —
+         iDev.Games serves through Cloudflare, which adds an analytics beacon —
+         and tracking protection or an ad blocker refuses those routinely.
+         A blocked tracker used to put this full-screen error over a game that
+         was loading fine. The game's files always come from the same origin as
+         this page, on every portal, so anything cross-origin is not ours. */
+      var src = e.target.src || '';
+      try { if (src && new URL(src, location.href).origin !== location.origin) return; } catch (x) {}
+      return show('A script failed to load', (src || 'inline script'));
     }
     var detail = (e && e.message ? e.message : e) + ' · ' + ((e && e.filename) || '') + ':' + ((e && e.lineno) || '');
     if (optional(detail)) return;
